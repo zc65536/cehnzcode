@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+import 'dotenv/config' 
 import { loadConfig, setConfig } from "./config/index.js";
 import { createChildLogger } from "./logger/index.js";
 import { toolRegistry } from "./tools/registry.js";
