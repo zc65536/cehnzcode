@@ -3,6 +3,7 @@ import 'dotenv/config'
 import { loadConfig, setConfig } from "./config/index.js";
 import { createChildLogger } from "./logger/index.js";
 import { toolRegistry } from "./tools/registry.js";
+import { loadBuiltinCommands } from "./commands/index.js";
 import { loadPlugins } from "./plugins/loader.js";
 import { Orchestrator } from "./orchestrator/index.js";
 import { TUIAdapter } from "./ui/tui/index.js";
@@ -25,6 +26,10 @@ async function main(): Promise<void> {
     // Register builtin tools
     toolRegistry.registerAll([readFile, writeFile, bash, globTool, grep]);
     logger.info({ count: toolRegistry.getAll().length }, "Builtin tools registered");
+
+    // Load builtin commands (auto-scan)
+    await loadBuiltinCommands();
+    logger.info("Builtin commands registered");
 
     // Load plugins
     await loadPlugins(config.pluginDirs);

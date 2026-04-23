@@ -34,6 +34,12 @@ cehnzcode/
 │   │   └── index.ts                  # Token 计数 + 用量追踪
 │   ├── prompts/
 │   │   └── index.ts                  # 系统 prompt 模板
+│   ├── commands/
+│   │   ├── registry.ts               # CommandRegistry：自动扫描 + 注册/查找 + run()
+│   │   └── builtins/
+│   │       ├── clear.ts              # /clear
+│   │       ├── new.ts                # /new
+│   │       └── help.ts               # /help
 │   ├── tools/
 │   │   ├── registry.ts               # 工具注册表（自动扫描）
 │   │   ├── executor.ts               # 并行工具执行器
@@ -85,6 +91,21 @@ interface Turn {
   tokenCount: number;
   compressed: boolean;
   timestamp: number;
+}
+
+// 命令定义
+interface CommandDefinition {
+  name: string;               // 命令名，不含 /
+  description: string;
+  execute(args: string, ctx: CommandContext): Promise<void>;
+}
+
+// 命令上下文（比 ToolContext 宽，可操作全局状态）
+interface CommandContext {
+  context: ConversationManager;
+  ui: UIAdapter;
+  config: AppConfig;
+  session: SessionManager;
 }
 
 // 工具定义
@@ -180,11 +201,21 @@ index.ts ← 入口
 | 场景 | 做法 |
 |------|------|
 | 加新工具 | 在 `tools/builtins/` 加文件，导出 `ToolDefinition`，自动注册 |
+| 加斜杠命令 | 在 `commands/builtins/` 加文件，导出 `CommandDefinition`，自动注册 |
 | 加 Skill | 在 `skills/builtins/` 加文件，导出 `SkillDefinition`，自动注册为斜杠命令 |
 | 加 Hook | `eventBus.on("tool:before", handler)` 或通过插件 |
 | 换 UI | 实现 `UIAdapter` 接口，更新 factory |
 | 加压缩策略 | 实现 `CompressionStrategy`，在 context 模块注册 |
 | 外部插件 | 在 pluginDirs 放目录，导出 `Plugin` 接口 |
+
+### Commands 系统
+
+`commands/registry.ts` 内部职责分两块，边界清晰：
+
+- **注册/查找**：自动扫描 `builtins/`、维护 `Map<name, CommandDefinition>`、提供 `register()` / `get()` / `getAll()`
+- **执行**：解析命令字符串（`"/clear arg1"` → name + args）、查找并调用 `execute()`，封装为 `run(input, ctx)` 方法
+
+`run()` 是未来迁移到独立 `executor.ts` 的切割点，届时只需将该方法移走，registry 不用改动。
 
 ### Skills 系统（预留，后续实现）
 

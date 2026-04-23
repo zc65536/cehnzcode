@@ -5,11 +5,11 @@ import { ConversationManager } from "../context/index.js";
 import { tokenTracker } from "../tokens/index.js";
 import { buildSystemMessage } from "../prompts/index.js";
 import { createChildLogger } from "../logger/index.js";
+import { commandRegistry } from "../commands/index.js";
 import type { AppConfig, UIAdapter } from "../types.js";
+import type { CommandContext } from "../commands/types.js";
 
 const logger = createChildLogger("orchestrator");
-
-type CommandHandler = (args: string) => Promise<void> | void;
 
 export class Orchestrator {
   private model: ModelClient;
@@ -17,7 +17,6 @@ export class Orchestrator {
   private executor: ToolExecutor;
   private ui: UIAdapter;
   private config: AppConfig;
-  private commands = new Map<string, CommandHandler>();
   private running = false;
 
   constructor(config: AppConfig, ui: UIAdapter) {
@@ -31,29 +30,17 @@ export class Orchestrator {
       signal: AbortSignal.timeout(config.toolTimeout),
     });
 
-    this.registerBuiltinCommands();
     this.setupSystemPrompt();
   }
 
-  private registerBuiltinCommands(): void {
-    this.commands.set("exit", () => { this.running = false; });
-    this.commands.set("quit", () => { this.running = false; });
-    this.commands.set("clear", () => {
-      this.context.clear();
-      this.setupSystemPrompt();
-      console.log("Context cleared.");
-    });
-    this.commands.set("tokens", () => {
-      const cum = tokenTracker.getCumulative();
-      console.log(`Total tokens used: ${cum.total} (prompt: ${cum.prompt}, completion: ${cum.completion})`);
-    });
-    this.commands.set("help", () => {
-      console.log("Commands: /exit, /clear, /tokens, /help");
-    });
-  }
-
-  registerCommand(name: string, handler: CommandHandler): void {
-    this.commands.set(name, handler);
+  /** 构造命令执行上下文，供 commandRegistry.execute 使用 */
+  private buildCommandContext(): CommandContext {
+    return {
+      ui: this.ui,
+      config: this.config,
+      context: this.context,
+      exit: () => { this.running = false; },
+    };
   }
 
   private setupSystemPrompt(): void {
@@ -73,12 +60,9 @@ export class Orchestrator {
       if (!input.trim()) continue;
 
       if (input.startsWith("/")) {
-        const [cmd, ...rest] = input.slice(1).split(" ");
-        const handler = this.commands.get(cmd);
-        if (handler) {
-          await handler(rest.join(" "));
-        } else {
-          console.log(`Unknown command: /${cmd}. Type /help for available commands.`);
+        const handled = await commandRegistry.execute(input, this.buildCommandContext());
+        if (!handled) {
+          this.ui.showAssistantMessage(`Unknown command: ${input}. Type /help for available commands.`);
         }
         continue;
       }
