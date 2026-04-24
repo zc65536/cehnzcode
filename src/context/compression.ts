@@ -1,4 +1,5 @@
-import type { Turn, AppConfig, CompressionResult, CompressionStrategy } from "../types.js";
+import type { Turn, AppConfig, CompressionStrategy } from "../types.js";
+import type { CompressionResult } from "./types.js";
 import { createChildLogger } from "../logger/index.js";
 
 const logger = createChildLogger("compression");

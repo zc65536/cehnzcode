@@ -88,33 +88,6 @@ interface ToolContext {
 **谁和谁**：ToolRegistry ↔ ModelClient、ToolExecutor  
 **作用**：工具的注册格式，内置工具和插件工具都实现此接口，注册到 ToolRegistry 后供模型调用
 
----
-
-### ModelRequest / ModelResponse
-
-```typescript
-interface ModelRequest {
-  messages: Turn[];
-  tools: ToolDefinition[];
-  stream: boolean;
-}
-
-interface ModelResponse {
-  content: string;
-  toolCalls: ToolCall[];
-  usage: TokenUsage;
-  finishReason: string;
-}
-
-interface TokenUsage {
-  prompt: number;
-  completion: number;
-  total: number;
-}
-```
-
-**谁和谁**：Orchestrator → ModelClient  
-**作用**：Orchestrator 组装请求交给 ModelClient 发送，ModelClient 返回模型响应（含工具调用和 token 用量）
 
 ---
 
@@ -214,6 +187,38 @@ interface SkillDefinition {
 
 **谁和谁**：预留，Skill 实现 → Orchestrator  
 **作用**：高阶技能的注册格式，Skill 可访问工具执行器、模型和上下文，实现复合 AI 能力（尚未接入主流程）
+
+---
+
+### TokenTracker（`src/tokens/index.ts`）
+
+**类和实例**
+`TokenTracker` — token 追踪器的类，供需要独立实例的场景使用，类对外暴露的成员方法有：
+- `track()` — 记录一次模型调用的用量
+- `totalInContext()` — 获取当前上下文 token 数，**判断是否压缩的主力**
+- `setContextTokens()` — 压缩后由 ConversationManager 更新上下文 token 数
+- `getCumulative()` — 获取累计用量
+- `getLastTurn()` — 获取最近一次调用的用量
+- `getTurnHistory()` — 获取完整的每轮历史
+- `getSummary()` — 获取统计摘要
+- `reset()` — 重置所有统计
+- `tokenTracker` — 全局单例，供 Orchestrator 直接使用，不需要自己实例化
+
+**核心函数**
+- `estimateTokensFromTurns(turns)` — 从 Turn 数组估算 token 数
+- `estimateTokens(text)` — 直接估算一段文本的 token 数
+- `estimateTokensFromJSON(obj)` — 估算一个 JSON 对象的 token 数
+
+**工具函数**
+- `createEmptyUsage()` — 创建一个空的 TokenUsage 对象 `{prompt:0, completion:0, total:0}`
+- `mergeUsage(...usages)` — 合并多个 TokenUsage 对象，做加法汇总
+- `formatUsage(usage)` — 把 TokenUsage 格式化成可读字符串，方便日志输出
+- `calculateCost(usage, pricing)` — 根据价格配置计算实际费用
+- `createEstimatedUsage(promptText, completionText)` — 创建一个带 `estimated: true` 标记的 TokenUsage，用于区分估算值和 API 返回值
+
+
+**谁和谁**：Orchestrator → TokenTracker；ConversationManager → `countTurnsTokens`  
+**作用**：token 计数（基于 gpt-tokenizer，按模型动态选择 BPE 编码，encoder 懒加载并缓存）+ 用量追踪。Orchestrator 在每次模型响应后调用 `track()`，ConversationManager 用 `countTurnsTokens()` 判断是否触发压缩，压缩完成后调用 `setContextTokens()` 更新
 
 ---
 
