@@ -49,6 +49,18 @@ cehnzcode/
 │   │       ├── bash.ts
 │   │       ├── glob.ts
 │   │       └── grep.ts
+├   ├── src/mcp/
+│   │   ├── plan.md                   # 规划文档
+│   │   ├── types.ts                  # MCP 相关类型定义
+│   │   ├── config.ts                 # 配置加载/保存/合并
+│   │   ├── registry.ts               # MCP 服务器注册表
+│   │   ├── client.ts                 # MCP 客户端（JSON-RPC 通信）
+│   │   ├── index.ts                  # MCPManager 主入口
+│   │   ├── installer.ts              # 服务器安装/检查逻辑
+│   │   └── transports/               # 传输层（模块化）
+│   │       ├── index.ts              # 传输层工厂
+│   │       ├── stdio.ts              # stdio 传输（uvx/npx）
+│   │       └── sse.ts                # SSE 传输（HTTP，预留）
 │   ├── ui/
 │   │   ├── interface.ts              # 抽象 UI 接口
 │   │   ├── tui/

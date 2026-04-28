@@ -100,6 +100,10 @@ export type AppEvents = {
   "tool:error": { call: ToolCall; error: Error };
   "context:compress": { removedCount: number; summary: string };
   "turn:added": { turn: Turn };
+  "mcp:tools:changed": { tools: unknown[] };
+  "mcp:server:connected": { serverName: string; tools: unknown[] };
+  "mcp:server:disconnected": { serverName: string };
+  "mcp:server:error": { serverName: string; error: Error };
 };
 
 // ==================== Compression ====================

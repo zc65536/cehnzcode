@@ -11,6 +11,7 @@ import { TUIAdapter } from "./ui/tui/index.js";
 // Import builtin tools
 import readFile from "./tools/builtins/read_file.js";
 import writeFile from "./tools/builtins/write_file.js";
+import editFile from "./tools/builtins/edit_file.js";
 import bash from "./tools/builtins/bash.js";
 import globTool from "./tools/builtins/glob.js";
 import grep from "./tools/builtins/grep.js";
@@ -24,7 +25,7 @@ async function main(): Promise<void> {
     logger.info("cehnzcode starting...");
 
     // Register builtin tools
-    toolRegistry.registerAll([readFile, writeFile, bash, globTool, grep]);
+    toolRegistry.registerAll([readFile, writeFile, editFile, bash, globTool, grep]);
     logger.info({ count: toolRegistry.getAll().length }, "Builtin tools registered");
 
     // Load builtin commands (auto-scan)
