@@ -43,7 +43,13 @@ export class ToolExecutor {
     await eventBus.emit("tool:before", { call });
 
     try {
-      const output = await tool.execute(call.arguments, this.ctx);
+      // 为每次工具执行创建新的超时信号，避免共享信号导致的超时问题
+      const toolCtx = {
+        ...this.ctx,
+        signal: AbortSignal.timeout(this.ctx.config.toolTimeout),
+      };
+      
+      const output = await tool.execute(call.arguments, toolCtx);
       const result: ToolResult = { callId: call.id, output };
       await eventBus.emit("tool:after", { call, result });
       getLogger().debug({ tool: call.name }, "Tool executed successfully");

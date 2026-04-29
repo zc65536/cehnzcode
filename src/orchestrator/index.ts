@@ -24,10 +24,12 @@ export class Orchestrator {
     this.ui = ui;
     this.model = new ModelClient(config);
     this.context = new ConversationManager(config);
+    // 注意：不在这里创建 executor，因为 AbortSignal.timeout() 会立即开始计时
+    // 我们需要在每次执行工具时创建新的 signal
     this.executor = new ToolExecutor({
       cwd: process.cwd(),
       config,
-      signal: AbortSignal.timeout(config.toolTimeout),
+      signal: new AbortController().signal, // 使用一个永不中止的 signal 作为默认值
     });
 
     this.setupSystemPrompt();

@@ -75,13 +75,13 @@ const env = detectEnvironment();
 
 const bash: ToolDefinition = {
   name: "bash",
-  description: `Execute a shell command. Current system: ${env.platform}, shell: ${env.shell}.`,
+  description: `Execute a shell command. Current system: ${env.platform}, shell: ${env.shell}. On Windows with bash, use forward slashes (/) for paths and standard Unix commands.`,
   parameters: {
     type: "object",
     properties: {
       command: { 
         type: "string", 
-        description: `Shell command to execute in ${env.shell} on ${env.platform}.` 
+        description: `Shell command to execute in ${env.shell} on ${env.platform}. ` 
       },
       timeout: { type: "number", description: "Timeout in milliseconds (default: 30000)" },
     },
@@ -94,16 +94,30 @@ const bash: ToolDefinition = {
     try {
       // Windows CMD 输出 GBK 编码，需要使用 chcp 65001 切换到 UTF-8
       let actualCommand = command;
-      if (os.platform() === "win32" && env.shell === "CMD") {
-        // 在命令前添加 chcp 65001 切换到 UTF-8 编码
-        actualCommand = `chcp 65001>nul && ${command}`;
-      }
-      
-      const { stdout, stderr } = await execAsync(actualCommand, {
+      let execOptions: any = {
         cwd: ctx.cwd,
         timeout,
         signal: ctx.signal,
-      });
+      };
+      
+      if (os.platform() === "win32") {
+        if (env.shell === "CMD") {
+          // 在命令前添加 chcp 65001 切换到 UTF-8 编码
+          actualCommand = `chcp 65001>nul && ${command}`;
+        }
+        
+        // Windows 环境下，如果检测到系统shell是bash（Git Bash/WSL等），使用bash执行
+        // 这样可以更好地处理路径和中文文件名
+        const systemShell = process.env.SHELL || "";
+        if (systemShell.includes("bash")) {
+          execOptions.shell = systemShell;
+        } else if (env.shell === "Bash") {
+          // 如果检测到父进程是bash，也使用bash
+          execOptions.shell = "bash";
+        }
+      }
+      
+      const { stdout, stderr } = await execAsync(actualCommand, execOptions);
       let output = "";
       if (stdout) output += stdout;
       if (stderr) output += (output ? "\n[stderr]\n" : "") + stderr;
