@@ -103,6 +103,10 @@ export class Orchestrator {
 
         // Execute tools in parallel
         for (const call of response.toolCalls) {
+          // 显示工具调用信息（特别是 bash 命令）
+          if (call.name === "bash" && call.arguments.command) {
+            this.ui.showAssistantMessage(`💻 ${call.arguments.command}`);
+          }
           this.ui.showToolStatus(call.name, "running");
         }
 
@@ -113,6 +117,16 @@ export class Orchestrator {
             response.toolCalls[i].name,
             results[i].error ? "error" : "done"
           );
+          
+          // 显示工具执行结果
+          if (results[i].error) {
+            this.ui.showAssistantMessage(`❌ ${results[i].error}`);
+          } else if (results[i].output && results[i].output !== "(no output)") {
+            // 对于 bash 命令，显示输出（如果有）
+            if (response.toolCalls[i].name === "bash") {
+              this.ui.showAssistantMessage(`📤 ${results[i].output}`);
+            }
+          }
         }
 
         this.context.addTurn({

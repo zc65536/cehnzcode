@@ -43,7 +43,7 @@ export class TUIAdapter implements UIAdapter {
 
   showTokenUsage(usage: { turn: TokenUsage; cumulative: TokenUsage }): void {
     console.log(
-      `  📊 Tokens - turn: ${usage.turn.total} | total: ${usage.cumulative.total}`
+      `  📊 Tokens - API call: ${usage.turn.total} (context: ${usage.turn.prompt} + response: ${usage.turn.completion}) | session total: ${usage.cumulative.total}`
     );
   }
 

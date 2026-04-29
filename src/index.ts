@@ -28,6 +28,10 @@ async function main(): Promise<void> {
     toolRegistry.registerAll([readFile, writeFile, editFile, bash, globTool, grep]);
     logger.info({ count: toolRegistry.getAll().length }, "Builtin tools registered");
 
+    // Initialize MCP and sync tools
+    await toolRegistry.initialize(process.cwd());
+    logger.info("MCP initialized and tools synchronized");
+
     // Load builtin commands (auto-scan)
     await loadBuiltinCommands();
     logger.info("Builtin commands registered");

@@ -1,17 +1,24 @@
 import { createChildLogger } from "../logger/index.js";
 import type { CommandDefinition, CommandContext } from "./types.js";
 
-const logger = createChildLogger("command-registry");
+// 延迟创建 logger，避免在模块加载时触发配置加载
+let logger: ReturnType<typeof createChildLogger> | null = null;
+function getLogger() {
+  if (!logger) {
+    logger = createChildLogger("command-registry");
+  }
+  return logger;
+}
 
 class CommandRegistry {
   private commands = new Map<string, CommandDefinition>();
 
   register(cmd: CommandDefinition): void {
     if (this.commands.has(cmd.name)) {
-      logger.warn({ command: cmd.name }, "Overwriting existing command");
+      getLogger().warn({ command: cmd.name }, "Overwriting existing command");
     }
     this.commands.set(cmd.name, cmd);
-    logger.debug({ command: cmd.name }, "Command registered");
+    getLogger().debug({ command: cmd.name }, "Command registered");
   }
 
   registerAll(cmds: CommandDefinition[]): void {
@@ -45,7 +52,7 @@ class CommandRegistry {
     const cmd = this.commands.get(name);
     if (!cmd) return false;
 
-    logger.debug({ command: name, args }, "Executing command");
+    getLogger().debug({ command: name, args }, "Executing command");
     await cmd.execute(args, ctx);
     return true;
   }

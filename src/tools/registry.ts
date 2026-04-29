@@ -1,8 +1,17 @@
 import type { ToolDefinition } from "../types.js";
 import { createChildLogger } from "../logger/index.js";
 import { validateToolDefinition } from "./validator.js";
+import { getMCPManager } from "../mcp/index.js";
+import { eventBus } from "../events/index.js";
 
-const logger = createChildLogger("tool-registry");
+// 延迟创建 logger，避免在模块加载时触发配置加载
+let logger: ReturnType<typeof createChildLogger> | null = null;
+function getLogger() {
+  if (!logger) {
+    logger = createChildLogger("tool-registry");
+  }
+  return logger;
+}
 
 /**
  * 工具注册表
@@ -14,6 +23,9 @@ class ToolRegistry {
   // 防抖：记录最近注册的工具和时间戳，避免短时间内重复注册
   private recentRegistrations = new Map<string, number>();
   private readonly debounceMs = 100; // 100ms 内的重复注册会被忽略
+  // 跟踪 MCP 工具名称
+  private mcpToolNames = new Set<string>();
+  private initialized = false;
 
   /**
    * 注册一个工具
@@ -25,7 +37,7 @@ class ToolRegistry {
     const now = Date.now();
     const lastRegistered = this.recentRegistrations.get(tool.name);
     if (lastRegistered && now - lastRegistered < this.debounceMs) {
-      logger.debug(
+      getLogger().debug(
         { tool: tool.name, debounceMs: this.debounceMs },
         "Ignoring duplicate registration within debounce window"
       );
@@ -37,19 +49,19 @@ class ToolRegistry {
       validateToolDefinition(tool);
     } catch (err) {
       const error = err as Error;
-      logger.error({ tool: tool.name, error: error.message }, "Tool validation failed");
+      getLogger().error({ tool: tool.name, error: error.message }, "Tool validation failed");
       throw error;
     }
 
     // 检查是否覆盖已有工具
     if (this.tools.has(tool.name)) {
-      logger.warn({ tool: tool.name }, "Overwriting existing tool");
+      getLogger().warn({ tool: tool.name }, "Overwriting existing tool");
     }
 
     // 注册工具并记录时间戳
     this.tools.set(tool.name, tool);
     this.recentRegistrations.set(tool.name, now);
-    logger.debug({ tool: tool.name }, "Tool registered");
+    getLogger().debug({ tool: tool.name }, "Tool registered");
   }
 
   /**
@@ -62,7 +74,7 @@ class ToolRegistry {
         this.register(tool);
       } catch (err) {
         const error = err as Error;
-        logger.error(
+        getLogger().error(
           { tool: tool.name, error: error.message },
           "Failed to register tool, skipping"
         );
@@ -117,6 +129,63 @@ class ToolRegistry {
   clear(): void {
     this.tools.clear();
     this.recentRegistrations.clear();
+  }
+
+  /**
+   * 初始化工具注册表
+   * 扫描内置工具并同步 MCP 工具
+   * @param projectRoot 项目根目录（用于初始化 MCP）
+   */
+  async initialize(projectRoot?: string): Promise<void> {
+    if (this.initialized) {
+      getLogger().warn("Tool registry already initialized");
+      return;
+    }
+
+    // 初始化 MCP 并同步工具
+    const mcpManager = getMCPManager(projectRoot);
+    await mcpManager.initialize();
+    await this.syncMCPTools();
+
+    // 监听 MCP 工具变化
+    eventBus.on("mcp:tools:changed", async () => {
+      await this.syncMCPTools();
+    });
+
+    this.initialized = true;
+    getLogger().info("Tool registry initialized with MCP support");
+  }
+
+  /**
+   * 同步 MCP 工具到注册表
+   * 移除旧的 MCP 工具，注册新的 MCP 工具
+   */
+  private async syncMCPTools(): Promise<void> {
+    const mcpManager = getMCPManager();
+    const mcpTools = mcpManager.getAllTools();
+
+    // 移除旧的 MCP 工具
+    for (const toolName of this.mcpToolNames) {
+      this.remove(toolName);
+    }
+    this.mcpToolNames.clear();
+
+    // 注册新的 MCP 工具
+    for (const mcpTool of mcpTools) {
+      const toolDef: ToolDefinition = {
+        name: mcpTool.fullName, // 使用带命名空间的名称
+        description: `[MCP:${mcpTool.serverName}] ${mcpTool.description}`,
+        parameters: mcpTool.inputSchema,
+        execute: async (args) => {
+          return await mcpManager.callTool(mcpTool.fullName, args);
+        },
+      };
+
+      this.register(toolDef);
+      this.mcpToolNames.add(mcpTool.fullName);
+    }
+
+    getLogger().info({ count: mcpTools.length }, "MCP tools synchronized");
   }
 }
 

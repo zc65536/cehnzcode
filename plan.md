@@ -263,7 +263,7 @@ interface SkillContext {
 
 1. **Phase 1 — 骨架**：types.ts + config + events + logger + 入口
 2. **Phase 2 — 模型通信**：model 客户端 + tokens 计数
-3. **Phase 3 — 工具系统**：registry + executor + 2-3 个内置工具
+3. **Phase 3 — 工具系统**：registry + executor + 2-3 个内置工具 + MCP
 4. **Phase 4 — 上下文管理**：ConversationManager + 压缩引擎
 5. **Phase 5 — 编排**：orchestrator 主循环，串联所有模块
 6. **Phase 6 — UI**：TUI 实现

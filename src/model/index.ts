@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { withRetry } from "./retry.js";
 import { eventBus } from "../events/index.js";
 import { tokenTracker } from "../tokens/index.js";
+import { apiLogger } from "../debug/api-logger.js";
 import type { AppConfig, Turn, ToolDefinition, ModelResponse, ToolCall } from "../types.js";
 
 export class ModelClient {
@@ -45,6 +46,25 @@ export class ModelClient {
         },
         finishReason: choice.finish_reason ?? "stop",
       };
+
+      // 调试日志：记录完整的请求和响应
+      if (apiLogger.isEnabled()) {
+        await apiLogger.log(
+          {
+            model: this.config.model,
+            messages,
+            tools: toolSchemas,
+            maxTokens: this.config.maxTokens,
+          },
+          {
+            content: result.content,
+            toolCalls: result.toolCalls,
+            usage: result.usage,
+            finishReason: result.finishReason,
+            rawResponse: response, // 保存原始响应
+          }
+        );
+      }
 
       tokenTracker.track(result.usage);
       await eventBus.emit("model:after", { response: result });

@@ -9,7 +9,11 @@ process.env.API_BASE_URL = "https://api.test.com/v1";
 process.env.MODEL = "test-model";
 process.env.MAX_TOKENS = "4096";
 process.env.CONTEXT_LIMIT = "100000";
-process.env.LOG_LEVEL = "error"; // 设置为 error 减少日志输出
+process.env.COMPRESS_KEEP_TURNS = "3";
+process.env.TOOL_TIMEOUT = "30000";
+process.env.LOG_LEVEL = "error";
+process.env.SESSION_DIR = ".sessions";
+process.env.PLUGIN_DIRS = "";
 
 import { MCPConfigManager } from "./config.js";
 import type { MCPServerConfig } from "./types.js";
