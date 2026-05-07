@@ -136,9 +136,9 @@ async function testMCPIntegration() {
   // 测试 5: autoApprove 检查
   console.log("Test 5: autoApprove checking");
 
-  // 测试内置工具（应该自动批准）
-  const builtinApproved = !mcpManager.isAutoApproved("builtin_tool");
-  console.log("  Builtin tool needs approval:", builtinApproved, "(should be false)");
+  // 测试内置工具（isAutoApproved 对非 MCP 工具返回 false）
+  const builtinResult = mcpManager.isAutoApproved("builtin_tool");
+  console.log("  Builtin tool isAutoApproved:", builtinResult, "(should be false - not an MCP tool)");
 
   // 测试 MCP 工具（不在 autoApprove 列表中）
   const mcpNotApproved = mcpManager.isAutoApproved("mcp__test__unapproved_tool");
@@ -146,7 +146,7 @@ async function testMCPIntegration() {
 
   // 测试 MCP 工具（在 autoApprove 列表中）
   const mcpApproved = mcpManager.isAutoApproved("mcp__test_server__test_tool");
-  console.log("  MCP tool (in list) auto-approved:", mcpApproved, "(depends on config)");
+  console.log("  MCP tool (in list) auto-approved:", mcpApproved, "(should be true if server connected)");
 
   console.log("✓ autoApprove checking works");
   console.log();

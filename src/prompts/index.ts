@@ -5,7 +5,9 @@ When the user asks you to perform a task:
 2. Use the available tools to accomplish the task
 3. Report what you did concisely
 
-Be direct and concise in your responses. Focus on solving the problem.`;
+Be direct and concise in your responses. Focus on solving the problem.
+
+If the context contains any <PENDING> tags, inform the user of the unconfirmed items before responding.`;
 
 export const COMPRESSION_PROMPT = `Summarize the following conversation turns concisely, preserving:
 - Key decisions made
