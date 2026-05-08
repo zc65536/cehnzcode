@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "id": "rag#001",
+      "type": "code",
+      "file": "src/utils/cycle-detector.ts",
+      "content": "export class CycleDetector {\n  private visited = new Set<string>();\n  \n  check(path: string): void {\n    if (this.visited.has(path)) {\n      throw new Error(`Circular reference detected: ${path}`);\n    }\n    this.visited.add(path);\n  }\n  \n  reset(): void {\n    this.visited.clear();\n  }\n}"
+    },
+    {
+      "id": "rag#002",
+      "type": "error_log",
+      "error": "Error: ENOENT: no such file or directory when reading config files with Chinese characters in path",
+      "cause": "Windows filesystem encoding mismatch (GBK vs UTF-8)",
+      "fix": "Apply encoding conversion before file path operations"
+    }
+  ]
+}

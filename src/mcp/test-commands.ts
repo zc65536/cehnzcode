@@ -38,7 +38,7 @@ async function testMCPCommands() {
     context: null as any, // 不需要实际的 ConversationManager
     ui: null as any, // 不需要实际的 UI
     config: null as any, // 不需要实际的 config
-    session: null as any, // 不需要实际的 session
+    exit: () => {}, // 不需要实际的 exit
   };
 
   // 测试 1: 显示帮助信息

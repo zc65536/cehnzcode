@@ -4,6 +4,7 @@ import * as url from "node:url";
 import { commandRegistry } from "./registry.js";
 import { createChildLogger } from "../logger/index.js";
 import type { CommandDefinition } from "./types.js";
+import type { Dirent } from "node:fs";
 
 const logger = createChildLogger("command-loader");
 
@@ -16,17 +17,17 @@ export async function loadBuiltinCommands(): Promise<void> {
     "builtins"
   );
 
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
-    entries = await fs.readdir(builtinsDir, { withFileTypes: true });
+    entries = await fs.readdir(builtinsDir, { withFileTypes: true }) as Dirent[];
   } catch {
     logger.warn({ dir: builtinsDir }, "Builtins directory not found");
     return;
   }
 
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".js")) continue;
-    const modulePath = path.join(builtinsDir, entry.name);
+    if (!entry.isFile() || !String(entry.name).endsWith(".js")) continue;
+    const modulePath = path.join(builtinsDir, String(entry.name));
     try {
       const mod = await import(modulePath);
       // 支持 default export 或任意具名 export（只要符合 CommandDefinition 形状）

@@ -81,10 +81,13 @@ export function validateJsonSchema(schema: JsonSchema, toolName: string): void {
     if (!schema.items) {
       // 只在非测试环境下输出警告
       try {
-        getLogger().warn(
-          { tool: toolName },
-          "Array type should define items schema for better validation"
-        );
+        const log = getLogger();
+        if (log) {
+          log.warn(
+            { tool: toolName },
+            "Array type should define items schema for better validation"
+          );
+        }
       } catch {
         // 测试环境下忽略 logger 错误
       }
@@ -119,7 +122,10 @@ export function validateToolDefinition(tool: ToolDefinition): void {
 
   // 只在非测试环境下输出日志
   try {
-    getLogger().debug({ tool: tool.name }, "Tool definition validated successfully");
+    const log = getLogger();
+    if (log) {
+      log.debug({ tool: tool.name }, "Tool definition validated successfully");
+    }
   } catch {
     // 测试环境下忽略 logger 错误
   }

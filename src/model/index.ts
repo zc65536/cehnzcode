@@ -108,13 +108,16 @@ export class ModelClient {
     const toolSchemas = tools.length > 0 ? this.toolsToClaudeSchemas(tools) : undefined;
 
     const response = await withRetry(async () => {
-      return this.anthropicClient!.messages.create({
+      const params: Anthropic.MessageCreateParams = {
         model: this.config.model,
         max_tokens: this.config.maxTokens,
         system,
         messages,
-        tools: toolSchemas,
-      });
+      };
+      if (toolSchemas) {
+        params.tools = toolSchemas;
+      }
+      return this.anthropicClient!.messages.create(params);
     });
 
     const toolCalls = this.extractClaudeToolCalls(response.content);
@@ -201,13 +204,17 @@ export class ModelClient {
     const { system, messages } = this.turnsToClaudeMessages(turns);
     const toolSchemas = tools.length > 0 ? this.toolsToClaudeSchemas(tools) : undefined;
 
-    const stream = await this.anthropicClient.messages.stream({
+    const params: Anthropic.MessageStreamParams = {
       model: this.config.model,
       max_tokens: this.config.maxTokens,
       system,
       messages,
-      tools: toolSchemas,
-    });
+    };
+    if (toolSchemas) {
+      params.tools = toolSchemas;
+    }
+
+    const stream = await this.anthropicClient.messages.stream(params);
 
     for await (const chunk of stream) {
       if (
@@ -299,7 +306,11 @@ export class ModelClient {
 
         // 添加文本内容
         if (turn.content) {
-          content.push({ type: "text", text: turn.content });
+          content.push({ 
+            type: "text", 
+            text: turn.content,
+            citations: null,
+          } as Anthropic.TextBlock);
         }
 
         // 添加工具调用
@@ -310,7 +321,8 @@ export class ModelClient {
               id: tc.id,
               name: tc.name,
               input: tc.arguments,
-            });
+              caller: { type: "direct" },
+            } as Anthropic.ToolUseBlock);
           }
         }
 
@@ -342,7 +354,10 @@ export class ModelClient {
     return tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      input_schema: tool.parameters as Record<string, unknown>,
+      input_schema: {
+        ...tool.parameters,
+        type: "object",
+      } as Anthropic.Tool.InputSchema,
     }));
   }
 

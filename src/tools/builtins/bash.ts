@@ -60,7 +60,7 @@ function getParentProcessName(): string {
     // 解析输出，格式类似：
     // Name
     // cmd.exe
-    const lines = result.split("\n").map((line) => line.trim()).filter(Boolean);
+    const lines = result.split("\n").map((line: string) => line.trim()).filter(Boolean);
     if (lines.length > 1) {
       return lines[1].toLowerCase();
     }

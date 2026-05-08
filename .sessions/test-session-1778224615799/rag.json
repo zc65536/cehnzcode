@@ -1,0 +1,37 @@
+{
+  "entries": [
+    {
+      "id": "rag#001",
+      "type": "code",
+      "file": "src/utils/cycle-detector.ts",
+      "content": "Cycle detection utility for config merge operations. Uses WeakSet to track visited objects during deep merge. Throws TypeError with clear message when circular reference detected.",
+      "tags": ["invariant", "performance"],
+      "confidence": "high",
+      "timestamp": "2026-05-08T07:16:45.799Z"
+    },
+    {
+      "id": "rag#002",
+      "type": "error_log",
+      "content": "ENOENT error with Chinese file paths on Windows. Root cause: encoding mismatch between GBK (Windows default) and UTF-8 (Node.js default). Fix: Apply Buffer.from(path, 'utf8').toString('ucs2') conversion before file operations, or use fs.promises with explicit encoding.",
+      "tags": ["windows", "encoding", "resolved"],
+      "confidence": "high",
+      "timestamp": "2026-05-08T07:16:45.799Z"
+    },
+    {
+      "id": "rag#003",
+      "type": "performance",
+      "content": "Performance bottlenecks identified: (1) YAML parsing overhead on large files, (2) schema validation on entire object tree, (3) unnecessary deep copies during merge. Approved solutions: streaming YAML parsing, lazy validation (validate on access), result caching with TTL.",
+      "tags": ["performance", "optimization"],
+      "confidence": "high",
+      "timestamp": "2026-05-08T07:16:45.799Z"
+    },
+    {
+      "id": "rag#004",
+      "type": "security",
+      "content": "Security requirement: Encrypted config storage for sensitive data (API keys, credentials). Pending decisions: (1) Encryption algorithm - AES-256-GCM vs libsodium, (2) Key management - environment variables vs dedicated key vault service.",
+      "tags": ["security", "encryption", "pending"],
+      "confidence": "medium",
+      "timestamp": "2026-05-08T07:16:45.799Z"
+    }
+  ]
+}

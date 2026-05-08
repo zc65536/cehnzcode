@@ -19,9 +19,10 @@ interface APILogEntry {
   timestamp: string;
   request: {
     model: string;
-    messages: OpenAI.ChatCompletionMessageParam[];
-    tools?: OpenAI.ChatCompletionTool[];
+    messages: any[]; // 改为 any[] 以支持不同的 API
+    tools?: any[];
     maxTokens?: number;
+    system?: string; // Claude 的 system 参数
   };
   response: {
     content: string;
@@ -65,8 +66,9 @@ class APILogger {
   async log(
     request: {
       model: string;
-      messages: OpenAI.ChatCompletionMessageParam[];
-      tools?: OpenAI.ChatCompletionTool[];
+      messages?: any[]; // OpenAI 使用
+      system?: string; // Claude 使用
+      tools?: any[];
       maxTokens?: number;
     },
     response: {
@@ -89,7 +91,7 @@ class APILogger {
       const filepath = join(this.logDir, filename);
 
       // 计算统计信息
-      const totalPromptLength = this.calculatePromptLength(request.messages);
+      const totalPromptLength = this.calculatePromptLength(request.messages || [], request.system);
       const responseLength = response.content.length;
       const tokensPerChar = responseLength > 0 
         ? response.usage.completion / responseLength 
@@ -100,7 +102,8 @@ class APILogger {
         timestamp: now.toISOString(),
         request: {
           model: request.model,
-          messages: request.messages,
+          messages: request.messages || [],
+          system: request.system,
           tools: request.tools,
           maxTokens: request.maxTokens,
         },
@@ -112,7 +115,7 @@ class APILogger {
           rawResponse: response.rawResponse,
         },
         analysis: {
-          messageCount: request.messages.length,
+          messageCount: (request.messages || []).length,
           totalPromptLength,
           responseLength,
           tokensPerChar: parseFloat(tokensPerChar.toFixed(2)),
@@ -146,11 +149,27 @@ class APILogger {
   /**
    * 计算 prompt 的总字符长度
    */
-  private calculatePromptLength(messages: OpenAI.ChatCompletionMessageParam[]): number {
+  private calculatePromptLength(messages: any[], system?: string): number {
     let total = 0;
+    
+    // 计算 system prompt 长度
+    if (system) {
+      total += system.length;
+    }
+    
+    // 计算 messages 长度
     for (const msg of messages) {
-      if ('content' in msg && typeof msg.content === 'string') {
-        total += msg.content.length;
+      if ('content' in msg) {
+        if (typeof msg.content === 'string') {
+          total += msg.content.length;
+        } else if (Array.isArray(msg.content)) {
+          // Claude 的 content 可能是数组
+          for (const block of msg.content) {
+            if (typeof block === 'object' && 'text' in block) {
+              total += String(block.text).length;
+            }
+          }
+        }
       }
     }
     return total;

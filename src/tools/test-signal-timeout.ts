@@ -14,13 +14,15 @@ async function testSignalTimeout() {
   
   const mockConfig: AppConfig = {
     apiKey: "test",
-    baseURL: "http://test",
+    apiBaseUrl: "http://test",
     model: "test",
+    maxTokens: 4096,
     contextLimit: 100000,
     compressKeepTurns: 3,
     toolTimeout: 2000, // 2秒超时
     logLevel: "error",
     sessionDir: ".sessions",
+    pluginDirs: [],
   };
   
   const mockContext: ToolContext = {

@@ -8,12 +8,12 @@
  */
 
 import bash from "./bash.js";
-import type { ToolExecutionContext } from "../../types.js";
+import type { ToolContext } from "../../types.js";
 
 async function testChineseFilename() {
   console.log("=== 测试中文文件名支持 ===\n");
   
-  const mockContext: ToolExecutionContext = {
+  const mockContext: ToolContext = {
     cwd: process.cwd(),
     config: { toolTimeout: 30000 } as any,
     signal: undefined as any,

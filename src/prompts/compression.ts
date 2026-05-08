@@ -108,6 +108,25 @@ Input may contain an existing compressed summary plus new conversation turns. Wh
 - New content **directly contradicts** existing conclusions → new content takes precedence; remove the old corresponding section and add \`updated="true"\` to the relevant tag
 - Existing compressed content **not touched by new content** → preserve as-is; do not remove
 
+## RAG Conflict & Maintenance Rules
+When the model discovers that new information relates to or conflicts with existing entries in the RAG (\`rag.json\`) during compression, it must follow this logic:
+
+1. **Incremental Update**:
+   - If new content refines, fixes, or logically extends an existing RAG entry (e.g., \`rag#001\`), use \`edit_file\` to modify that entry.
+   - Update the \`confidence\` field to \`high\` and refresh the \`timestamp\` on that entry's JSON object.
+
+2. **Conflict Resolution**:
+   - If code logic, architectural decisions, or error logs in the new conversation **directly contradict** what is recorded in RAG:
+     - **Defer to the latest conversation**: update the RAG entry content to reflect the current state.
+     - **Mark the status**: set the entry's \`confidence\` field to \`updated\`, or add \`latest-version\` to its \`tags\`.
+     - **Sync references**: ensure \`<REF>\` tags in the compressed summary point to the updated RAG ID.
+
+3. **Stale Data Handling**:
+   - If certain RAG content has been fully abandoned by the current task (e.g., the user explicitly states they are no longer using a particular approach), do **not** physically delete the entry — instead set its \`confidence\` to \`stale\`.
+
+4. **Atomic Writes**:
+   - Every \`edit_file\` call must preserve the integrity of the JSON format and must not corrupt the index structure of \`entries\`.
+
 ## Output Format
 
 Output the compressed structured content directly, with no explanation or pleasantries.
@@ -335,6 +354,21 @@ The \`confidence\` field indicates whether the content is still trustworthy. \`s
 // - 新内容是对已有结论的**补充或细化** → 合并保留，不删除原有内容
 // - 新内容与已有结论**直接矛盾** → 以新内容为准，删除原有对应部分，在相关标签上附注 \`updated="true"\`
 // - 已有压缩中未被新内容涉及的部分 → 原样保留，不得删除
+
+// ## RAG 冲突与维护规则
+// 当模型在压缩过程中发现新信息与 RAG (`rag.json`) 中的已有条目存在关联或冲突时，必须遵循以下逻辑：
+// 1. **增量更新 (Incremental Update)**：
+//    - 如果新内容是对已有 RAG 条目（如 `rag#001`）的完善、修复或逻辑补充，应使用 `edit_file` 修改该条目。
+//    - 在该条目的 JSON 对象中将 `confidence` 更新为 `high`，并更新 `timestamp`。
+// 2. **内容冲突 (Conflict Resolution)**：
+//    - 如果新对话中的代码逻辑、架构决策或错误日志与 RAG 中记录的内容**直接矛盾**：
+//      - **以最新对话为准**：修改 RAG 条目内容以反映最新状态。
+//      - **标记状态**：将该条目的 `confidence` 字段标记为 `updated` 或在 `tags` 中增加 `latest-version`。
+//      - **引用同步**：确保压缩摘要中的 `<REF>` 标签指向的是更新后的 RAG ID。
+// 3. **陈旧信息处理 (Stale Data)**：
+//    - 如果 RAG 中的某些信息已被当前任务彻底废弃（例如：用户明确表示不再使用某套方案），不要物理删除该条目，而是将其 `confidence` 设置为 `stale`。
+// 4. **原子性写入**：
+//    - 每次 `edit_file` 必须确保 JSON 格式的完整性，不得破坏 `entries` 的索引结构。
 
 // ## 输出格式
 

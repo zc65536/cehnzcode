@@ -592,7 +592,7 @@ COMPRESSION_THRESHOLD=0.85     # 压缩阈值
 **场景**：模型不断调用工具，不返回最终结果。
 
 **处理**：
-- 设置最大迭代次数（如 10 次）
+- 设置最大迭代次数（如 15 次）
 - 超过限制后强制终止
 - 使用最后一次 assistant 的内容作为结果
 
@@ -787,7 +787,7 @@ eventBus.emit("context:compress:error", { error });
 ## 参考资料
 
 - `src/mcp/INTEGRATION_GUIDE.md` - MCP 集成指南（工具调用模式参考）
-- `src/prompts/compression.ts` - 现有压缩提示词
+- `src/prompts/compression.ts` - 现有压缩提示词(DELETION_COMPRESSION_PROMPT、COMPRESSION_PROMPT、COMPRESSION_SUPPLEMENT_PROMPT都在这个文件中)
 - `src/tokens/index.ts` - Token 估算和追踪
 - `src/tools/executor.ts` - 工具执行器
 - `src/model/index.ts` - 模型客户端

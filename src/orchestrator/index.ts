@@ -2,6 +2,7 @@ import { ModelClient } from "../model/index.js";
 import { ToolExecutor } from "../tools/executor.js";
 import { toolRegistry } from "../tools/registry.js";
 import { ConversationManager } from "../context/index.js";
+import { SessionManager } from "../session/index.js";
 import { tokenTracker } from "../tokens/index.js";
 import { buildSystemMessage } from "../prompts/index.js";
 import { createChildLogger } from "../logger/index.js";
@@ -14,6 +15,7 @@ const logger = createChildLogger("orchestrator");
 export class Orchestrator {
   private model: ModelClient;
   private context: ConversationManager;
+  private sessionManager: SessionManager;
   private executor: ToolExecutor;
   private ui: UIAdapter;
   private config: AppConfig;
@@ -23,7 +25,13 @@ export class Orchestrator {
     this.config = config;
     this.ui = ui;
     this.model = new ModelClient(config);
-    this.context = new ConversationManager(config);
+    
+    // 初始化 SessionManager
+    this.sessionManager = new SessionManager(config);
+    
+    // 传递 SessionManager 给 ConversationManager
+    this.context = new ConversationManager(config, this.sessionManager);
+    
     // 注意：不在这里创建 executor，因为 AbortSignal.timeout() 会立即开始计时
     // 我们需要在每次执行工具时创建新的 signal
     this.executor = new ToolExecutor({
@@ -31,8 +39,6 @@ export class Orchestrator {
       config,
       signal: new AbortController().signal, // 使用一个永不中止的 signal 作为默认值
     });
-
-    this.setupSystemPrompt();
   }
 
   /** 构造命令执行上下文，供 commandRegistry.execute 使用 */
@@ -54,7 +60,12 @@ export class Orchestrator {
   }
 
   async run(): Promise<void> {
+    // 初始化会话
+    await this.sessionManager.init();
+    logger.info({ sessionId: this.sessionManager.getSessionId() }, "Session started");
+
     await this.ui.init();
+    this.setupSystemPrompt();
     this.running = true;
 
     while (this.running) {
@@ -71,6 +82,10 @@ export class Orchestrator {
 
       await this.handleUserInput(input);
     }
+
+    // 保存会话
+    await this.sessionManager.saveTurns(this.context.getTurns());
+    logger.info({ sessionId: this.sessionManager.getSessionId() }, "Session saved");
 
     this.ui.dispose();
     logger.info("Session ended");
@@ -140,8 +155,9 @@ export class Orchestrator {
 
         // Check if compression is needed
         if (this.context.needsCompression()) {
+          logger.info("Context compression triggered");
           await this.context.compress();
-          logger.info("Context compressed");
+          logger.info("Context compressed successfully");
         }
       }
     } catch (err) {
