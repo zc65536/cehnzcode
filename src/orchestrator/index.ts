@@ -97,12 +97,30 @@ export class Orchestrator {
     try {
       while (true) {
         const tools = toolRegistry.getAll();
-        const response = await this.model.chat(this.context.getTurns(), tools);
+        
+        // 使用流式输出
+        const { stream, getResponse } = this.model.chatStream(this.context.getTurns(), tools);
+        
+        // 实时显示流式输出
+        let hasContent = false;
+        for await (const chunk of stream) {
+          if (!hasContent) {
+            hasContent = true;
+            // 第一个chunk时开始显示
+          }
+          this.ui.showAssistantChunk(chunk);
+        }
+
+        // 流式输出完成后，获取完整响应（包含usage）
+        const response = await getResponse();
+
+        // 只有在流式结束后才追踪token
+        tokenTracker.track(response.usage);
 
         if (response.toolCalls.length === 0) {
           this.context.addTurn({ role: "assistant", content: response.content, tags: ["assistant"] });
-          this.ui.showAssistantMessage(response.content);
-
+          
+          // 显示token使用情况
           const lastTurn = tokenTracker.getLastTurn();
           if (lastTurn) {
             this.ui.showTokenUsage({ turn: lastTurn, cumulative: tokenTracker.getCumulative() });

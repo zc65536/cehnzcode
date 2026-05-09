@@ -4,7 +4,10 @@ import { withRetry } from "./retry.js";
 import { eventBus } from "../events/index.js";
 import { tokenTracker } from "../tokens/index.js";
 import { apiLogger } from "../debug/api-logger.js";
+import { createChildLogger } from "../logger/index.js";
 import type { AppConfig, Turn, ToolDefinition, ModelResponse, ToolCall } from "../types.js";
+
+const logger = createChildLogger("model");
 
 export class ModelClient {
   private openaiClient?: OpenAI;
@@ -160,12 +163,140 @@ export class ModelClient {
     return result;
   }
 
-  async *chatStream(turns: Turn[], tools: ToolDefinition[]): AsyncIterable<string> {
+  /**
+   * 流式聊天，返回文本流和最终的usage信息
+   * 使用方式：
+   *   const { stream, getResponse } = model.chatStream(turns, tools);
+   *   for await (const chunk of stream) { ... }
+   *   const response = await getResponse(); // 获取完整响应和usage
+   */
+  chatStream(turns: Turn[], tools: ToolDefinition[]): {
+    stream: AsyncIterable<string>;
+    getResponse: () => Promise<ModelResponse>;
+  } {
     if (this.isClaudeModel) {
-      yield* this.chatStreamWithClaude(turns, tools);
+      return this.chatStreamWithClaudeWrapper(turns, tools);
     } else {
-      yield* this.chatStreamWithOpenAI(turns, tools);
+      return this.chatStreamWithOpenAIWrapper(turns, tools);
     }
+  }
+
+  private chatStreamWithOpenAIWrapper(
+    turns: Turn[],
+    tools: ToolDefinition[]
+  ): {
+    stream: AsyncIterable<string>;
+    getResponse: () => Promise<ModelResponse>;
+  } {
+    if (!this.openaiClient) {
+      throw new Error("OpenAI client not initialized");
+    }
+
+    const messages = this.turnsToOpenAIMessages(turns);
+    const toolSchemas = tools.length > 0 ? this.toolsToOpenAISchemas(tools) : undefined;
+
+    let fullContent = "";
+    let fullResponse: any = null;
+    let streamFinished = false;
+    const toolCallsMap = new Map<number, { id: string; name: string; argsStr: string }>();
+
+    const streamPromise = this.openaiClient.chat.completions.create({
+      model: this.config.model,
+      messages,
+      tools: toolSchemas,
+      max_tokens: this.config.maxTokens,
+      stream: true,
+      stream_options: { include_usage: true }, // 请求返回usage信息
+    });
+
+    const stream = (async function* (this: ModelClient) {
+      const streamResponse = await streamPromise;
+      
+      for await (const chunk of streamResponse) {
+        const delta = chunk.choices[0]?.delta;
+        
+        // 收集文本内容
+        if (delta?.content) {
+          fullContent += delta.content;
+          yield delta.content;
+        }
+
+        // 收集工具调用
+        if (delta?.tool_calls) {
+          for (const toolCall of delta.tool_calls) {
+            const index = toolCall.index;
+            if (!toolCallsMap.has(index)) {
+              toolCallsMap.set(index, {
+                id: toolCall.id || "",
+                name: toolCall.function?.name || "",
+                argsStr: "",
+              });
+            }
+            const existing = toolCallsMap.get(index)!;
+            if (toolCall.id) existing.id = toolCall.id;
+            if (toolCall.function?.name) existing.name = toolCall.function.name;
+            if (toolCall.function?.arguments) {
+              existing.argsStr += toolCall.function.arguments;
+            }
+          }
+        }
+
+        // 保存最后一个chunk（包含usage信息）
+        fullResponse = chunk;
+      }
+
+      streamFinished = true;
+    }).bind(this)();
+
+    const getResponse = async (): Promise<ModelResponse> => {
+      // 等待流式输出完成
+      if (!streamFinished) {
+        for await (const _ of stream) {
+          // 消费完所有流
+        }
+      }
+
+      // 解析工具调用
+      const toolCalls: ToolCall[] = [];
+      for (const [_, tc] of toolCallsMap) {
+        if (tc.id && tc.name) {
+          try {
+            toolCalls.push({
+              id: tc.id,
+              name: tc.name,
+              arguments: tc.argsStr ? JSON.parse(tc.argsStr) : {},
+            });
+          } catch (err) {
+            logger.error({ error: err, argsStr: tc.argsStr }, "Failed to parse tool call arguments");
+          }
+        }
+      }
+
+      const result: ModelResponse = {
+        content: fullContent,
+        toolCalls,
+        usage: {
+          prompt: fullResponse?.usage?.prompt_tokens ?? 0,
+          completion: fullResponse?.usage?.completion_tokens ?? 0,
+          total: fullResponse?.usage?.total_tokens ?? 0,
+        },
+        finishReason: fullResponse?.choices[0]?.finish_reason ?? "stop",
+      };
+
+      // 如果没有usage信息，使用fallback估算
+      if (result.usage.total === 0) {
+        const promptText = JSON.stringify(messages);
+        result.usage = {
+          prompt: 0, // 将在track中估算
+          completion: 0,
+          total: 0,
+        };
+      }
+
+      return result;
+    };
+
+    return { stream, getResponse };
   }
 
   private async *chatStreamWithOpenAI(
@@ -191,6 +322,85 @@ export class ModelClient {
       const delta = chunk.choices[0]?.delta?.content;
       if (delta) yield delta;
     }
+  }
+
+  private chatStreamWithClaudeWrapper(
+    turns: Turn[],
+    tools: ToolDefinition[]
+  ): {
+    stream: AsyncIterable<string>;
+    getResponse: () => Promise<ModelResponse>;
+  } {
+    if (!this.anthropicClient) {
+      throw new Error("Anthropic client not initialized");
+    }
+
+    const { system, messages } = this.turnsToClaudeMessages(turns);
+    const toolSchemas = tools.length > 0 ? this.toolsToClaudeSchemas(tools) : undefined;
+
+    const params: Anthropic.MessageStreamParams = {
+      model: this.config.model,
+      max_tokens: this.config.maxTokens,
+      system,
+      messages,
+    };
+    if (toolSchemas) {
+      params.tools = toolSchemas;
+    }
+
+    let fullContent = "";
+    let fullMessage: Anthropic.Message | null = null;
+    let streamFinished = false;
+
+    const streamPromise = this.anthropicClient.messages.stream(params);
+
+    const stream = (async function* () {
+      const streamResponse = await streamPromise;
+
+      for await (const chunk of streamResponse) {
+        if (
+          chunk.type === "content_block_delta" &&
+          chunk.delta.type === "text_delta"
+        ) {
+          fullContent += chunk.delta.text;
+          yield chunk.delta.text;
+        }
+      }
+
+      // 获取最终的完整消息（包含usage）
+      fullMessage = await streamResponse.finalMessage();
+      streamFinished = true;
+    })();
+
+    const getResponse = async (): Promise<ModelResponse> => {
+      // 等待流式输出完成
+      if (!streamFinished) {
+        for await (const _ of stream) {
+          // 消费完所有流
+        }
+      }
+
+      if (!fullMessage) {
+        throw new Error("Stream did not complete successfully");
+      }
+
+      const toolCalls = this.extractClaudeToolCalls(fullMessage.content);
+
+      const result: ModelResponse = {
+        content: fullContent,
+        toolCalls,
+        usage: {
+          prompt: fullMessage.usage.input_tokens,
+          completion: fullMessage.usage.output_tokens,
+          total: fullMessage.usage.input_tokens + fullMessage.usage.output_tokens,
+        },
+        finishReason: fullMessage.stop_reason ?? "end_turn",
+      };
+
+      return result;
+    };
+
+    return { stream, getResponse };
   }
 
   private async *chatStreamWithClaude(

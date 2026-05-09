@@ -82,6 +82,7 @@ export interface UIAdapter {
   init(): Promise<void>;
   promptInput(prompt: string): Promise<string>;
   showAssistantStream(stream: AsyncIterable<string>): Promise<void>;
+  showAssistantChunk(chunk: string): void; // 显示流式输出的单个chunk
   showAssistantMessage(content: string): void;
   showToolStatus(name: string, status: "running" | "done" | "error"): void;
   showError(err: Error): void;
