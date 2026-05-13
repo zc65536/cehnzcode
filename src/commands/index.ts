@@ -1,48 +1,42 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import * as url from "node:url";
 import { commandRegistry } from "./registry.js";
 import { createChildLogger } from "../logger/index.js";
 import type { CommandDefinition } from "./types.js";
-import type { Dirent } from "node:fs";
 
 const logger = createChildLogger("command-loader");
 
 /**
- * 扫描 builtins/ 目录，自动注册所有导出 CommandDefinition 的模块
+ * 自动加载所有内置命令
+ * 使用动态 import 配合显式的文件列表，确保打包工具能正确处理
  */
 export async function loadBuiltinCommands(): Promise<void> {
-  const builtinsDir = path.join(
-    path.dirname(url.fileURLToPath(import.meta.url)),
-    "builtins"
-  );
+  // 显式列出所有命令文件，这样打包工具可以静态分析
+  const commandFiles = [
+    "./builtins/clear.js",
+    "./builtins/exit.js",
+    "./builtins/help.js",
+    "./builtins/mcp.js",
+  ];
 
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(builtinsDir, { withFileTypes: true }) as Dirent[];
-  } catch {
-    logger.warn({ dir: builtinsDir }, "Builtins directory not found");
-    return;
-  }
+  const commands: CommandDefinition[] = [];
 
-  for (const entry of entries) {
-    if (!entry.isFile() || !String(entry.name).endsWith(".js")) continue;
-    const modulePath = path.join(builtinsDir, String(entry.name));
+  for (const file of commandFiles) {
     try {
-      const mod = await import(modulePath);
-      // 支持 default export 或任意具名 export（只要符合 CommandDefinition 形状）
-      const candidates: unknown[] = mod.default
-        ? [mod.default]
-        : Object.values(mod);
+      const mod = await import(file);
+      // 支持具名导出（如 clearCommand）或 default 导出
+      const candidates: unknown[] = mod.default ? [mod.default] : Object.values(mod);
+      
       for (const candidate of candidates) {
         if (isCommandDefinition(candidate)) {
-          commandRegistry.register(candidate);
+          commands.push(candidate);
         }
       }
     } catch (err) {
-      logger.warn({ file: entry.name, error: (err as Error).message }, "Failed to load builtin command");
+      logger.warn({ file, error: (err as Error).message }, "Failed to load builtin command");
     }
   }
+
+  commandRegistry.registerAll(commands);
+  logger.debug({ count: commands.length }, "Builtin commands loaded");
 }
 
 function isCommandDefinition(v: unknown): v is CommandDefinition {

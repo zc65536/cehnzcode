@@ -5,7 +5,8 @@
 ## 特性
 
 - ✅ **OpenAI 兼容接口**：支持任何 OpenAI 兼容的 API
-- ✅ **内置工具**：文件读写、编辑、bash 命令、glob、grep 等
+- ✅ **内置工具**：文件读写、编辑、bash 命令、glob、grep、项目结构探索等
+- ✅ **项目结构探索**：AI 可以自主探索项目目录结构，智能过滤和折叠显示
 - ✅ **MCP 支持**：通过 MCP 协议动态扩展工具集
 - ✅ **上下文管理**：智能压缩和截断策略
 - ✅ **会话持久化**：保存和恢复对话历史
@@ -135,6 +136,7 @@ pip install uv
 - `bash` - 执行 bash 命令
 - `glob` - 文件路径匹配
 - `grep` - 文本搜索
+- `get_project_structure` - 获取项目目录结构（支持智能过滤和折叠）
 
 ## 项目结构
 
@@ -183,6 +185,8 @@ DEBUG_API_LOG=true
 
 - [项目计划](./plan.md) - 完整的架构设计和实现计划
 - [代码规范](./CLAUDE.md) - 代码风格和开发规范
+- [项目结构探索实现](./PROJECT_EXPLORER_IMPLEMENTATION.md) - Project Explorer 功能说明
+- [Context 模块 README](./src/context/README.md) - Context 模块文档
 - [MCP 模块 README](./src/mcp/README.md) - MCP 模块文档
 - [MCP 集成状态](./src/mcp/INTEGRATION_STATUS.md) - MCP 集成完成情况
 - [MCP 使用示例](./src/mcp/USAGE_EXAMPLES.md) - MCP 实际使用示例

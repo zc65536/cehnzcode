@@ -15,6 +15,7 @@ import editFile from "./tools/builtins/edit_file.js";
 import bash from "./tools/builtins/bash.js";
 import globTool from "./tools/builtins/glob.js";
 import grep from "./tools/builtins/grep.js";
+import projectStructureTool from "./tools/builtins/project_structure.js";
 
 async function main(): Promise<void> {
   try {
@@ -25,7 +26,7 @@ async function main(): Promise<void> {
     logger.info("cehnzcode starting...");
 
     // Register builtin tools
-    toolRegistry.registerAll([readFile, writeFile, editFile, bash, globTool, grep]);
+    toolRegistry.registerAll([readFile, writeFile, editFile, bash, globTool, grep, projectStructureTool]);
     logger.info({ count: toolRegistry.getAll().length }, "Builtin tools registered");
 
     // Initialize MCP and sync tools

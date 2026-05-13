@@ -1,408 +1,46 @@
-# Task Planner — 任务分解与步骤执行
+根据方案梳理，一共需要以下几个提示词：
 
-## 目标
+---
 
-给定一个复杂任务，模型能够自主创建一个步骤流程（plan），然后按照这个流程一步一步执行，最终完成任务。
+**1. plan-creation — 生成计划**
 
-## 核心概念
-
-### Plan（计划）
-一个 Plan 包含：
-- 任务描述
-- 分解后的步骤列表
-- 步骤之间的依赖关系
-- 执行状态
-
-### Step（步骤）
-每个 Step 包含：
-- 步骤描述
-- 依赖的前置步骤
-- 执行状态（pending/running/done/failed）
-- 执行结果
-
-### 执行模式
-- **顺序执行**：按依赖关系顺序执行
-- **并行执行**：无依赖关系的步骤可并行
-- **失败重试**：步骤失败时可重试或跳过
-
-## 接口设计
-
-```typescript
-// src/planner/types.ts
-
-interface TaskPlanner {
-  /**
-   * 创建任务计划
-   * @param task 任务描述
-   * @param context 上下文信息（可选）
-   * @returns 生成的计划
-   */
-  createPlan(task: string, context?: PlanContext): Promise<TaskPlan>;
-  
-  /**
-   * 执行计划
-   * @param plan 要执行的计划
-   * @returns 异步生成器，逐步返回执行结果
-   */
-  executePlan(plan: TaskPlan): AsyncGenerator<StepResult>;
-  
-  /**
-   * 暂停执行
-   */
-  pause(): void;
-  
-  /**
-   * 恢复执行
-   */
-  resume(): void;
-  
-  /**
-   * 取消执行
-   */
-  cancel(): void;
-  
-  /**
-   * 保存计划到文件
-   */
-  savePlan(plan: TaskPlan, path: string): Promise<void>;
-  
-  /**
-   * 从文件加载计划
-   */
-  loadPlan(path: string): Promise<TaskPlan>;
-  
-  /**
-   * 获取当前执行状态
-   */
-  getStatus(): PlanStatus;
-}
-
-interface TaskPlan {
-  id: string;
-  task: string;                    // 原始任务描述
-  description: string;             // 任务详细说明
-  steps: Step[];
-  status: PlanStatus;
-  createdAt: number;
-  startedAt?: number;
-  completedAt?: number;
-  metadata: PlanMetadata;
-}
-
-interface Step {
-  id: string;
-  index: number;                   // 步骤序号（用于显示）
-  description: string;             // 步骤描述
-  action: StepAction;              // 要执行的动作
-  dependencies: string[];          // 依赖的步骤 ID
-  status: StepStatus;
-  result?: StepResult;
-  error?: string;
-  startedAt?: number;
-  completedAt?: number;
-}
-
-interface StepAction {
-  type: "tool_call" | "model_query" | "user_input" | "validation";
-  payload: Record<string, unknown>;
-}
-
-type StepStatus = "pending" | "ready" | "running" | "done" | "failed" | "skipped";
-type PlanStatus = "draft" | "ready" | "running" | "paused" | "completed" | "failed" | "cancelled";
-
-interface StepResult {
-  stepId: string;
-  status: StepStatus;
-  output?: string;
-  error?: string;
-  duration: number;              // 执行耗时（毫秒）
-}
-
-interface PlanContext {
-  projectRoot?: string;
-  relevantFiles?: string[];
-  constraints?: string[];        // 约束条件，如"不要修改 package.json"
-}
-
-interface PlanMetadata {
-  estimatedDuration?: number;    // 预估耗时（分钟）
-  complexity: "simple" | "medium" | "complex";
-  tags: string[];                // 如 ["refactor", "bug-fix"]
-}
-```
-
-## 工作流程
-
-### 1. 创建计划阶段
+输入：用户任务描述、项目上下文
+输出：完整计划 JSON（模块列表、dependsOn、relatedModules、inputContract、outputContract、元数据）
 
 ```
-用户输入任务
-    ↓
-调用模型分解任务
-    ↓
-生成步骤列表 + 依赖关系
-    ↓
-验证计划合理性
-    ↓
-返回 TaskPlan
-```
-
-**Prompt 设计**：
-
-```typescript
-const PLAN_CREATION_PROMPT = `
-你是一个任务规划专家。给定一个任务，你需要将其分解为可执行的步骤。
+你是一个任务规划专家。给定一个任务，将其分解为独立的功能模块。
 
 ## 任务
 ${task}
 
-## 上下文
+## 项目上下文
 ${context}
 
 ## 要求
-1. 将任务分解为 3-10 个清晰的步骤
-2. 每个步骤应该是原子性的、可验证的
-3. 明确步骤之间的依赖关系
-4. 为每个步骤指定执行动作（工具调用、模型查询、用户输入等）
+1. 将任务分解为 3-10 个模块，每个模块职责单一、边界清晰
+2. 每个模块只描述"要做什么"，不展开内部实现细节
+3. dependsOn：必须等待完成才能开始的模块（调度依据，影响执行顺序）
+4. relatedModules：执行时需要参考笔记的模块（信息来源，不影响调度）
+5. inputContract：本模块依赖哪些其他模块的对外接口，含接口名和功能描述
+6. outputContract：本模块对外暴露哪些接口，含接口名和功能描述
+7. 接口依赖关系宁多勿少，漏掉依赖比多写依赖代价更高
 
-## 输出格式
-返回 JSON 格式的计划：
+## 输出格式（只输出 JSON，不要有其他内容）
 {
-  "description": "任务的详细说明",
-  "steps": [
+  "description": "任务整体说明",
+  "modules": [
     {
-      "description": "步骤描述",
-      "action": {
-        "type": "tool_call",
-        "payload": { "tool": "read_file", "args": {...} }
-      },
-      "dependencies": []  // 依赖的步骤索引
+      "description": "模块描述",
+      "dependsOn": [0, 1],
+      "relatedModules": [0, 1, 2],
+      "inputContract": [
+        { "name": "verifyToken", "description": "验证 JWT 并返回 UserId", "sourceModule": 1 }
+      ],
+      "outputContract": [
+        { "name": "authMiddleware", "description": "Express 中间件，验证请求头中的 token" }
+      ]
     }
   ],
-  "metadata": {
-    "estimatedDuration": 10,
-    "complexity": "medium",
-    "tags": ["refactor"]
-  }
-}
-`;
-```
-
-### 2. 执行计划阶段
-
-```
-加载计划
-    ↓
-构建依赖图
-    ↓
-循环执行：
-  - 找到所有 ready 状态的步骤（依赖已满足）
-  - 并行执行这些步骤
-  - 更新步骤状态
-  - 检查是否有新的 ready 步骤
-    ↓
-所有步骤完成 → 返回结果
-```
-
-**执行器伪代码**：
-
-```typescript
-async function* executePlan(plan: TaskPlan): AsyncGenerator<StepResult> {
-  const graph = buildDependencyGraph(plan.steps);
-  
-  while (hasUnfinishedSteps(plan)) {
-    // 找到所有可执行的步骤（依赖已满足）
-    const readySteps = plan.steps.filter(step => 
-      step.status === "pending" && 
-      allDependenciesDone(step, plan)
-    );
-    
-    if (readySteps.length === 0) {
-      // 没有可执行的步骤，检查是否死锁
-      if (hasRunningSteps(plan)) {
-        await sleep(100);
-        continue;
-      } else {
-        throw new Error("计划执行死锁：存在未完成的步骤但无法继续");
-      }
-    }
-    
-    // 并行执行所有 ready 步骤
-    const results = await Promise.allSettled(
-      readySteps.map(step => executeStep(step, plan))
-    );
-    
-    // 逐个返回结果
-    for (const result of results) {
-      yield result.value;
-    }
-  }
-}
-
-async function executeStep(step: Step, plan: TaskPlan): Promise<StepResult> {
-  step.status = "running";
-  step.startedAt = Date.now();
-  
-  try {
-    let output: string;
-    
-    switch (step.action.type) {
-      case "tool_call":
-        output = await executeToolCall(step.action.payload);
-        break;
-      case "model_query":
-        output = await queryModel(step.action.payload);
-        break;
-      case "user_input":
-        output = await promptUser(step.description);
-        break;
-      case "validation":
-        output = await validateCondition(step.action.payload);
-        break;
-    }
-    
-    step.status = "done";
-    step.result = {
-      stepId: step.id,
-      status: "done",
-      output,
-      duration: Date.now() - step.startedAt!,
-    };
-    
-    return step.result;
-  } catch (error) {
-    step.status = "failed";
-    step.error = error.message;
-    step.result = {
-      stepId: step.id,
-      status: "failed",
-      error: error.message,
-      duration: Date.now() - step.startedAt!,
-    };
-    
-    // 根据配置决定是否继续执行
-    if (step.critical) {
-      throw error;  // 关键步骤失败，终止整个计划
-    }
-    
-    return step.result;
-  } finally {
-    step.completedAt = Date.now();
-  }
-}
-```
-
-## 命令集成
-
-### /plan 命令
-
-```typescript
-// src/commands/builtins/plan.ts
-
-export const planCommand: CommandDefinition = {
-  name: "plan",
-  description: "创建并执行任务计划",
-  async execute(args, ctx) {
-    const planner = ctx.planner;
-    
-    // 创建计划
-    ctx.ui.showStatus("正在分析任务并创建计划...");
-    const plan = await planner.createPlan(args);
-    
-    // 显示计划
-    ctx.ui.showPlan(plan);
-    
-    // 询问是否执行
-    const confirm = await ctx.ui.confirm("是否开始执行此计划？");
-    if (!confirm) {
-      ctx.ui.showMessage("计划已保存，使用 /plan resume 继续执行");
-      await planner.savePlan(plan, `.cehnzcode/plans/${plan.id}.json`);
-      return;
-    }
-    
-    // 执行计划
-    ctx.ui.showStatus("开始执行计划...");
-    for await (const result of planner.executePlan(plan)) {
-      ctx.ui.showStepResult(result);
-    }
-    
-    ctx.ui.showSuccess("计划执行完成！");
-  },
-};
-```
-
-### /plan 子命令
-
-- `/plan <任务描述>` - 创建并执行计划
-- `/plan list` - 列出所有保存的计划
-- `/plan resume <plan-id>` - 恢复执行计划
-- `/plan show <plan-id>` - 查看计划详情
-- `/plan cancel` - 取消当前执行的计划
-
-## UI 展示
-
-### 计划展示
-
-```
-📋 任务计划
-
-任务: 重构用户认证模块，使用 JWT 替换 session
-
-预估耗时: 30 分钟
-复杂度: 中等
-
-步骤:
-  1. ✓ 读取当前认证代码 (src/auth/)
-  2. ✓ 分析现有 session 实现
-  3. → 安装 jsonwebtoken 依赖
-  4. ⏸ 创建 JWT 工具函数
-  5. ⏸ 修改登录接口
-  6. ⏸ 修改认证中间件
-  7. ⏸ 更新测试用例
-  8. ⏸ 运行测试验证
-
-图例: ✓ 完成  → 进行中  ⏸ 等待  ✗ 失败
-
-是否开始执行？(y/n)
-```
-
-### 执行过程展示
-
-```
-执行中... [████████░░] 60%
-
-✓ 步骤 1: 读取当前认证代码 (2.3s)
-✓ 步骤 2: 分析现有 session 实现 (5.1s)
-→ 步骤 3: 安装 jsonwebtoken 依赖
-  正在运行: npm install jsonwebtoken
-  
-⏸ 步骤 4: 创建 JWT 工具函数 (等待步骤 3)
-⏸ 步骤 5: 修改登录接口 (等待步骤 4)
-```
-
-## 持久化
-
-计划保存在 `.cehnzcode/plans/` 目录：
-
-```
-.cehnzcode/
-  └── plans/
-      ├── plan_20260509_001.json
-      ├── plan_20260509_002.json
-      └── active.json              # 当前活跃的计划
-```
-
-JSON 格式：
-
-```json
-{
-  "id": "plan_20260509_001",
-  "task": "重构用户认证模块",
-  "description": "使用 JWT 替换 session",
-  "steps": [...],
-  "status": "running",
-  "createdAt": 1715270400000,
-  "startedAt": 1715270450000,
   "metadata": {
     "estimatedDuration": 30,
     "complexity": "medium",
@@ -411,77 +49,159 @@ JSON 格式：
 }
 ```
 
-## 错误处理
+---
 
-### 步骤失败策略
+**2. plan-validation — 供需匹配验证**
 
-1. **关键步骤失败**：终止整个计划，保存状态
-2. **非关键步骤失败**：标记为 failed，继续执行后续步骤
-3. **依赖步骤失败**：跳过所有依赖它的步骤
+输入：完整计划 JSON
+输出：验证结果 JSON（通过 or 问题列表）
 
-### 重试机制
+```
+你是一个架构审查员。审查以下任务计划，检查三个方面：
 
-```typescript
-interface Step {
-  // ...
-  retryConfig?: {
-    maxRetries: number;
-    currentRetry: number;
-    retryDelay: number;  // 毫秒
-  };
+## 待审查的计划
+${planJson}
+
+## 审查项
+1. 循环依赖：dependsOn 中是否存在循环依赖（A 依赖 B，B 依赖 A）
+2. 接口供需匹配：所有模块 inputContract 声明的接口，是否都能在某个模块的 outputContract 中找到对应提供方
+3. 职责重叠：是否有多个模块声明了相同或高度重叠的 outputContract 接口
+
+## 输出格式（只输出 JSON，不要有其他内容）
+{
+  "valid": true,
+  "issues": [
+    {
+      "type": "missing_provider | circular_dependency | overlap",
+      "description": "问题描述",
+      "modules": [0, 2]
+    }
+  ]
 }
 ```
 
-## 实现文件
+---
+
+**3. module-execution — 模块实现**
+
+输入：计划信息、当前模块、inputContract、outputContract、相关模块笔记
+输出：实现代码（通过工具调用写文件）
 
 ```
-src/planner/
-  ├── plan.md                    # 本方案文档
-  ├── types.ts                   # 类型定义
-  ├── index.ts                   # TaskPlanner 主实现
-  ├── executor.ts                # 步骤执行器
-  ├── dependency-graph.ts        # 依赖图构建与分析
-  ├── persistence.ts             # 计划持久化
-  └── prompts.ts                 # 计划生成的 prompt
+你正在执行一个任务计划中的一个模块。
 
-src/commands/builtins/
-  └── plan.ts                    # /plan 命令
+## 总体目标
+${plan.task}
+
+## 完整模块列表
+${plan.modules.map((m, i) => `${i + 1}. ${m.description} [${m.status}]`).join('\n')}
+
+## 当前模块（第 ${module.index + 1} 个，共 ${plan.modules.length} 个）
+${module.description}
+
+## 你必须实现并导出的对外接口
+${module.outputContract.map(c => `- ${c.name}：${c.description}`).join('\n')}
+以上接口必须全部实现并导出，一个都不能少。
+
+## 你可以使用的外部接口
+${module.inputContract.map(c => `- ${c.name}（来自模块：${c.sourceModule}）：${c.description}`).join('\n')}
+
+## 来自相关模块的笔记
+${relatedNotesContext}
+
+## 执行要求
+- 实现生产级别的代码，不写占位符或 TODO
+- 只创建和修改当前模块负责的文件，不修改其他模块的文件
+- 如果相关模块笔记中的信息不足，根据笔记中的文件列表读取对应文件
 ```
 
-## 测试计划
+---
 
-```typescript
-// src/planner/test-planner.ts
+**4. note-generation — 生成模块笔记**
 
-async function testPlanner() {
-  const planner = new TaskPlanner(config);
-  
-  // 测试简单任务
-  const simplePlan = await planner.createPlan("创建一个 hello.txt 文件");
-  console.log("简单任务步骤数:", simplePlan.steps.length);
-  
-  // 测试复杂任务
-  const complexPlan = await planner.createPlan(
-    "重构用户认证模块，使用 JWT 替换 session"
-  );
-  console.log("复杂任务步骤数:", complexPlan.steps.length);
-  
-  // 测试执行
-  for await (const result of planner.executePlan(simplePlan)) {
-    console.log(`步骤 ${result.stepId}: ${result.status}`);
-  }
-  
-  // 测试持久化
-  await planner.savePlan(complexPlan, ".cehnzcode/plans/test.json");
-  const loaded = await planner.loadPlan(".cehnzcode/plans/test.json");
-  console.log("加载的计划:", loaded.id);
+输入：完整对话历史（模块实现过程）
+输出：笔记 JSON
+
+```
+模块实现已完成。根据你刚才的实现，输出本模块的笔记。
+
+只输出 JSON，不要有其他内容：
+
+{
+  "files": [
+    { "path": "src/auth/jwt.ts", "description": "JWT 生成与验证核心逻辑" }
+  ],
+  "exports": [
+    { "name": "verifyToken", "description": "验证 JWT token，返回 UserId" }
+  ],
+  "envVars": ["JWT_SECRET"],
+  "extra": {}
+}
+
+要求：
+- files 列出所有实际创建或修改的文件
+- exports 按照你实际实现的接口填写，必须覆盖所有要求实现的对外接口
+- 如果某个要求实现的接口没有出现在 exports 中，说明实现有遗漏，请先补充实现再输出笔记
+```
+
+---
+
+**5. test-generation — 生成模块测试**
+
+输入：outputContract、模块笔记、相关代码文件内容
+输出：测试文件（通过工具调用写到 `.cehnzcode/notes/<module-id>.test.ts`）
+
+```
+为以下模块的对外接口生成单元测试。
+
+## 模块对外接口（outputContract）
+${module.outputContract.map(c => `- ${c.name}：${c.description}`).join('\n')}
+
+## 模块笔记
+${JSON.stringify(module.note, null, 2)}
+
+## 相关代码文件
+${codeFilesContent}
+
+## 要求
+- 针对每个对外接口至少写一个正常用例和一个边界/异常用例
+- 只测试对外接口的行为，不测试内部实现细节
+- 测试文件写入 .cehnzcode/notes/${module.id}.test.ts
+```
+
+---
+
+**6. validate-note — 验证笔记与声明是否匹配**
+
+输入：outputContract、模块笔记 JSON
+输出：验证结果 JSON
+
+```
+对比以下两份信息，判断模块笔记是否完整覆盖了声明的对外接口。
+
+## 计划阶段声明的对外接口（outputContract）
+${JSON.stringify(module.outputContract, null, 2)}
+
+## 模块执行后写入的笔记（exports）
+${JSON.stringify(module.note.exports, null, 2)}
+
+## 判断标准
+outputContract 中每一个接口，都必须在笔记的 exports 中找到对应条目（名称匹配，功能描述语义一致）。
+
+## 输出格式（只输出 JSON，不要有其他内容）
+{
+  "valid": true,
+  "missing": ["verifyToken", "UserId"],
+  "mismatch": [
+    { "name": "generateToken", "issue": "描述不符：声明返回 string，笔记中描述为返回 token 对象" }
+  ]
 }
 ```
 
-## 未来扩展
+---
 
-1. **可视化**：生成 Mermaid 流程图展示计划
-2. **模板系统**：预定义常见任务的计划模板
-3. **学习优化**：根据历史执行记录优化计划生成
-4. **协作模式**：多个 agent 协作执行不同步骤
-5. **回滚机制**：步骤失败时自动回滚已执行的操作
+总共 6 个提示词，按阶段分布：
+
+- createPlan：1、2
+- executeModule：3、4
+- validateNote：5、6

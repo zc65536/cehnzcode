@@ -8,7 +8,7 @@
 
 1. **获取项目结构树**：递归扫描项目目录，生成树形结构
 2. **智能过滤**：自动忽略 node_modules、.git 等无关目录
-3. **元数据提取**：提供文件大小、修改时间、文件类型等信息
+3. **元数据提取**：提供文件大小、修改时间、文件扩展名等信息
 4. **缓存机制**：避免重复扫描，提升性能
 
 ## 接口设计
@@ -48,7 +48,7 @@ interface ExploreOptions {
   maxDepth?: number;           // 最大递归深度，默认 3
   includeHidden?: boolean;     // 是否包含隐藏文件，默认 false
   excludePatterns?: string[];  // 额外的排除模式
-  includeMetadata?: boolean;   // 是否包含文件元数据，默认 false
+  collapseThreshold?: number;  // 目录内文件数超过此值时折叠，默认 10
 }
 
 interface ProjectStructure {
@@ -70,14 +70,11 @@ interface FileMetadata {
   size: number;                // 字节数
   modified: number;            // 修改时间戳
   extension?: string;          // 文件扩展名
-  language?: string;           // 编程语言（根据扩展名推断）
 }
 
 interface ProjectSummary {
   totalFiles: number;
   totalDirectories: number;
-  filesByLanguage: Record<string, number>;  // 如 { "typescript": 45, "json": 3 }
-  largestFiles: Array<{ path: string; size: number }>;  // 前 5 个最大文件
 }
 ```
 
@@ -118,26 +115,40 @@ const DEFAULT_EXCLUDE_PATTERNS = [
 - 限制最大深度，避免过深递归
 - 大文件（>1MB）不读取内容，只记录元数据
 
-### 4. 语言识别
-
-根据文件扩展名映射到语言：
+### 4. 折叠逻辑
 
 ```typescript
-const EXTENSION_TO_LANGUAGE: Record<string, string> = {
-  '.ts': 'typescript',
-  '.tsx': 'typescript',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
-  '.py': 'python',
-  '.java': 'java',
-  '.go': 'go',
-  '.rs': 'rust',
-  '.md': 'markdown',
-  '.json': 'json',
-  '.yaml': 'yaml',
-  '.yml': 'yaml',
-  // ... 更多映射
-};
+function shouldCollapse(node: FileNode, options: ExploreOptions): boolean {
+  // 超过深度限制
+  if (node.depth >= options.maxDepth) {
+    return true;
+  }
+  
+  // 目录内文件数过多
+  if (node.type === "directory" && node.children) {
+    const fileCount = countFiles(node.children);
+    if (fileCount > options.collapseThreshold) {
+      return true;
+    }
+  }
+  
+  // 在排除列表中
+  if (DEFAULT_EXCLUDE_PATTERNS.some(pattern => 
+    minimatch(node.path, pattern)
+  )) {
+    return true;
+  }
+  
+  return false;
+}
+
+function formatCollapsed(node: FileNode): string {
+  if (isExcluded(node)) {
+    return `${node.name}/  (excluded)`;
+  }
+  const fileCount = countFiles(node.children);
+  return `${node.name}/  (${fileCount} files)`;
+}
 ```
 
 ## 工具集成
@@ -149,19 +160,24 @@ const EXTENSION_TO_LANGUAGE: Record<string, string> = {
 
 export const projectStructureTool: ToolDefinition = {
   name: "get_project_structure",
-  description: "获取项目的文件和目录结构。当需要了解项目整体布局、查找特定文件位置、或理解项目组织方式时使用此工具。",
+  description: "获取项目的文件和目录结构。当需要了解项目整体布局、查找特定文件位置、或理解项目组织方式时使用此工具。返回简洁的缩进格式，深层或大型目录会折叠显示。",
   parameters: {
     type: "object",
     properties: {
       max_depth: {
         type: "number",
-        description: "最大递归深度，默认 3。更大的值会返回更详细的结构，但可能较慢。",
+        description: "最大递归深度，默认 3。如果看到折叠的目录需要展开，可以增加此值。",
         default: 3,
       },
-      include_metadata: {
+      include_hidden: {
         type: "boolean",
-        description: "是否包含文件元数据（大小、修改时间等），默认 false。",
+        description: "是否包含隐藏文件（以 . 开头），默认 false。",
         default: false,
+      },
+      collapse_threshold: {
+        type: "number",
+        description: "目录内文件数超过此值时折叠显示，默认 10。设为 0 表示不折叠。",
+        default: 10,
       },
     },
   },
@@ -169,10 +185,11 @@ export const projectStructureTool: ToolDefinition = {
     const explorer = ctx.projectExplorer;
     const structure = await explorer.getStructure({
       maxDepth: args.max_depth as number,
-      includeMetadata: args.include_metadata as boolean,
+      includeHidden: args.include_hidden as boolean,
+      collapseThreshold: args.collapse_threshold as number,
     });
     
-    // 格式化为易读的文本
+    // 格式化为简洁的缩进文本
     return formatStructureAsText(structure);
   },
 };
@@ -180,52 +197,104 @@ export const projectStructureTool: ToolDefinition = {
 
 ## 输出格式
 
-工具返回的文本格式示例：
+工具返回的文本格式示例（极简缩进格式）：
 
 ```
-项目结构 (扫描深度: 3)
-根目录: /path/to/project
+45 files, 12 directories
 
-📁 src/
-  📁 context/
-    📄 index.ts (2.3 KB)
-    📄 compression.ts (5.1 KB)
-    📄 types.ts (1.2 KB)
-  📁 model/
-    📄 index.ts (8.4 KB)
-    📄 retry.ts (3.2 KB)
-  📁 tools/
-    📁 builtins/
-      📄 read_file.ts (4.5 KB)
-      📄 write_file.ts (3.8 KB)
-    📄 registry.ts (6.2 KB)
-📄 package.json (1.5 KB)
-📄 tsconfig.json (0.8 KB)
-
-项目摘要:
-- 总文件数: 45
-- 总目录数: 12
-- 语言分布: TypeScript (42), JSON (3)
-- 最大文件: src/model/index.ts (8.4 KB)
+src/
+  commands/
+    builtins/
+      clear.ts
+      exit.ts
+      help.ts
+      mcp.ts
+    index.ts
+    registry.ts
+    types.ts
+  context/
+    strategies/
+      summary.ts
+      truncate.ts
+    compression-agent.ts
+    compression-tools.ts
+    compression.ts
+    index.ts
+    types.ts
+  model/
+    index.ts
+    retry.ts
+  tools/
+    builtins/  (15 items)
+    executor.ts
+    registry.ts
+  types.ts
+  index.ts
+node_modules/
+package.json
+tsconfig.json
+README.md
 ```
+
+### 格式规范
+
+1. **开头摘要**：第一行显示文件和目录总数，帮助模型快速了解项目规模
+2. **目录标识**：目录名后加 `/`，文件名不加任何后缀
+3. **缩进规则**：每层使用 2 个空格缩进
+4. **无元数据**：不显示文件大小、修改时间、语言等信息（保持简洁）
+5. **折叠显示**：当目录内容过多时，显示 `dirname/ (N items)` 提示模型这里有内容但未展开
+6. **深度限制**：达到 maxDepth 的目录只显示 `dirname/` 不展开子项
+
+### 目录显示说明
+
+- `dirname/` - 普通目录（可能达到深度限制或为空）
+- `dirname/ (N items)` - 被折叠的目录（子项数量超过阈值）
+- `node_modules/` - 被排除的目录（在排除列表中，不扫描内容）
+
+### 折叠策略
+
+满足以下任一条件时折叠目录：
+- 目录内**直接子项数量** > collapseThreshold（默认 10）
+- 目录在排除列表中（如 node_modules，不扫描内容）
+
+达到 maxDepth 的目录会停止扫描子项，但不标记为折叠。
+
+折叠后显示格式：
+- `dirname/ (N items)` - 子项过多被折叠
+- `dirname/` - 达到深度限制或为空
+
+模型看到折叠提示后，如果需要查看详细内容，会主动调用工具指定更大的 maxDepth 或 collapseThreshold，或使用其他工具（如 glob、grep）深入探索。
 
 ## Prompt 集成
 
-在 system prompt 中添加说明：
+在 system prompt 中添加工具使用原则（不重复描述具体工具）：
 
 ```typescript
 // src/prompts/index.ts
 
 export const SYSTEM_PROMPT = `
-你是一个智能代码助手...
+You are a helpful AI coding assistant. You have access to tools that allow you to read files, write files, and execute commands.
 
-## 可用工具
+When the user asks you to perform a task:
+1. Understand what they need
+2. Before making changes, gather the necessary context:
+   - If the project layout is unfamiliar, start with a shallow listing of the 
+      root . Skip dependency and build directories 
+      like node_modules, dist, build, .next, target, .git, coverage. Go deeper 
+      only into subdirectories that look relevant to the task.
+   - Use grep to locate relevant code (function definitions, imports, usages, error messages) rather than reading files blindly
+   - Only read_file on files that grep confirms are relevant, or that the task directly references
+   - Read the target file before modifying it
+   - Do NOT read entire directories or files "just in case" — keep context focused and minimal
+   - Call independent tools in parallel when possible (e.g. multiple greps for unrelated symbols)
+3. Use the available tools to accomplish the task
+4. Report what you did concisely
 
-### 项目探索
-- **get_project_structure**: 获取项目的文件和目录结构
-  - 当用户询问"项目里有什么文件"、"代码在哪里"时，主动使用此工具
-  - 当需要理解项目整体架构时使用
-  - 当不确定某个功能在哪个文件中时使用
+Strategy: explore structure if unfamiliar → grep to pinpoint → read_file to understand. This keeps context precise and avoids noise.
+
+Be direct and concise in your responses. Focus on solving the problem.
+
+If the context contains any <PENDING> tags, inform the user of the unconfirmed items before responding.
 
 ...
 `;
@@ -235,18 +304,23 @@ export const SYSTEM_PROMPT = `
 
 1. **用户问"这个项目是做什么的？"**
    - 模型调用 `get_project_structure` 查看整体结构
-   - 然后读取 README.md 和 package.json
-   - 综合给出项目说明
+   - 看到项目有 src/、package.json、README.md
+   - 然后读取 README.md 和 package.json 了解详情
 
 2. **用户说"帮我找到处理用户认证的代码"**
    - 模型调用 `get_project_structure` 查看目录
-   - 发现 `src/auth/` 目录
+   - 发现 `src/auth/` 目录或看到 `auth.ts` 文件
    - 使用 `read_file` 读取相关文件
 
 3. **用户问"为什么构建失败？"**
-   - 模型调用 `get_project_structure` 检查是否有配置文件
-   - 读取 tsconfig.json、package.json 等
-   - 分析可能的问题
+   - 模型调用 `get_project_structure` 检查配置文件
+   - 看到 tsconfig.json、package.json 等
+   - 读取这些文件分析问题
+
+4. **模型看到折叠的目录**
+   - 输出显示 `tests/ (15 files)`
+   - 如果模型判断需要查看测试文件
+   - 调用 `get_project_structure` 增加 `max_depth` 或使用 `glob` 工具查找 `tests/**/*.test.ts`
 
 ## 实现文件
 
