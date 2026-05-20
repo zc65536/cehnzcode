@@ -7,7 +7,7 @@
 对于计数token的，流式全部输出完之后再进行token计数，避免usage没有输出出来
 详见：STREAMING_TOKENS_IMPLEMENTATION.md
 
-3. 让工具真正聪明起来，会自动找文件，自动的去看需要看的文件。
+3. 让工具真正聪明起来，会自动找文件，自动的去看需要看的文件。√
 
 4. mcp 对应的tools兼容 √
 

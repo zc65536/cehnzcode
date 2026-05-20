@@ -13,6 +13,14 @@ export interface AppConfig {
   pluginDirs: string[];
 }
 
+// ==================== Message ====================
+
+/** 通用消息类型，用于 planner 讨论会话等独立对话场景 */
+export interface Message {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
 // ==================== Conversation ====================
 
 export interface ToolCall {
@@ -114,12 +122,44 @@ export interface CompressionStrategy {
   compress(turns: Turn[]): Promise<string>;
 }
 
+// ==================== Hooks ====================
+
+/** 拦截器的三种返回：不改继续 / 改数据继续 / 取消 */
+export type HookResult<T> =
+  | { action: "continue" }
+  | { action: "modify"; data: T }
+  | { action: "cancel"; reason: string };
+
+/** 可干预节点：handler 可修改数据或取消操作 */
+export interface HookDataMap {
+  "session:start":  { config: AppConfig; sessionId: string };
+  "turn:before":    { input: string };
+  "model:before":   { messages: Turn[]; tools: ToolDefinition[] };
+  "model:after":    { response: ModelResponse };
+  "tool:before":    { call: ToolCall };
+  "tool:after":     { call: ToolCall; result: ToolResult };
+}
+
+/** 纯观察节点：handler 只读数据，不影响流程 */
+export interface ListenerDataMap {
+  "turn:after":       { input: string; finalResponse: string; toolCallCount: number; usage: TokenUsage };
+  "context:compress": { removedCount: number; summary: string };
+  "session:end":      { sessionId: string; totalUsage: TokenUsage; turnCount: number };
+}
+
 // ==================== Plugins ====================
 
 export interface Plugin {
   name: string;
   tools?: ToolDefinition[];
-  hooks?: Partial<{ [K in keyof AppEvents]: (data: AppEvents[K]) => void | Promise<void> }>;
+  /** 可干预 hook，handler 返回 HookResult */
+  interceptors?: {
+    [K in keyof HookDataMap]?: (data: HookDataMap[K]) => Promise<HookResult<HookDataMap[K]>>;
+  };
+  /** 纯观察 hook，handler 返回 void */
+  listeners?: {
+    [K in keyof ListenerDataMap]?: (data: ListenerDataMap[K]) => void | Promise<void>;
+  };
 }
 
 // ==================== Skills (预留，见 src/skills/types.ts) ====================

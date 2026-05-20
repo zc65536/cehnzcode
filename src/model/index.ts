@@ -293,6 +293,23 @@ export class ModelClient {
         };
       }
 
+      if (apiLogger.isEnabled()) {
+        await apiLogger.log(
+          {
+            model: this.config.model,
+            messages,
+            tools: toolSchemas,
+            maxTokens: this.config.maxTokens,
+          },
+          {
+            content: result.content,
+            toolCalls: result.toolCalls,
+            usage: result.usage,
+            finishReason: result.finishReason,
+          }
+        );
+      }
+
       return result;
     };
 
@@ -396,6 +413,24 @@ export class ModelClient {
         },
         finishReason: fullMessage.stop_reason ?? "end_turn",
       };
+
+      if (apiLogger.isEnabled()) {
+        await apiLogger.log(
+          {
+            model: this.config.model,
+            system,
+            messages,
+            tools: toolSchemas,
+            maxTokens: this.config.maxTokens,
+          },
+          {
+            content: result.content,
+            toolCalls: result.toolCalls,
+            usage: result.usage,
+            finishReason: result.finishReason,
+          }
+        );
+      }
 
       return result;
     };

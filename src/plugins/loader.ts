@@ -33,11 +33,14 @@ function registerPlugin(plugin: Plugin): void {
   if (plugin.tools) {
     toolRegistry.registerAll(plugin.tools);
   }
-  if (plugin.hooks) {
-    for (const [event, handler] of Object.entries(plugin.hooks)) {
-      if (handler) {
-        hookRunner.register(event as any, handler as any);
-      }
+  if (plugin.interceptors) {
+    for (const [event, handler] of Object.entries(plugin.interceptors)) {
+      if (handler) hookRunner.intercept(event as any, handler as any);
+    }
+  }
+  if (plugin.listeners) {
+    for (const [event, handler] of Object.entries(plugin.listeners)) {
+      if (handler) hookRunner.listen(event as any, handler as any);
     }
   }
 }

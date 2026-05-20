@@ -3,6 +3,7 @@ import { eventBus } from "../events/index.js";
 import { estimateTokens } from "../tokens/index.js";
 import { compress } from "./compression.js";
 import type { AppConfig, Turn } from "../types.js";
+import type { CompressionResult } from "./types.js";
 import type { SessionManager } from "../session/index.js";
 
 export class ConversationManager {
@@ -45,9 +46,9 @@ export class ConversationManager {
     return this.getTotalTokens() > threshold;
   }
 
-  async compress(): Promise<void> {
+  async compress(): Promise<CompressionResult | undefined> {
     if (this.turns.length <= this.config.compressKeepTurns * 2) {
-      return;
+      return undefined;
     }
 
     const keepCount = this.config.compressKeepTurns * 2; // keep N user+assistant pairs
@@ -96,7 +97,11 @@ export class ConversationManager {
         removedCount: result.removedCount,
         summary: result.summary,
       });
+
+      return result;
     }
+
+    return undefined;
   }
 
   clear(): void {

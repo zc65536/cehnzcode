@@ -15,6 +15,8 @@ export async function loadBuiltinCommands(): Promise<void> {
     "./builtins/exit.js",
     "./builtins/help.js",
     "./builtins/mcp.js",
+    "./builtins/plan.js",
+    "./builtins/skill.js",
   ];
 
   const commands: CommandDefinition[] = [];

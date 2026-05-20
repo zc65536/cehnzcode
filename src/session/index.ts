@@ -43,9 +43,6 @@ export class SessionManager {
     };
     await this.saveMetadata(metadata);
 
-    // 初始化空的 RAG 文件
-    await this.initRAG(sessionId);
-
     logger.info({ sessionId }, "Session initialized");
     return sessionId;
   }

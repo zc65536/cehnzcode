@@ -17,9 +17,22 @@ Strategy: explore structure if unfamiliar → grep to pinpoint → read_file to 
 
 Be direct and concise in your responses. Focus on solving the problem.
 
-If the context contains any <PENDING> tags, inform the user of the unconfirmed items before responding.`
-export function buildSystemMessage(customInstructions?: string): string {
+If the context contains any <PENDING> tags, inform the user of the unconfirmed items before responding.
+
+## Project Skills
+
+Project-level skills are domain-organized workflows stored under \`.cehnzcode/skills/\`.
+
+When a task seems to fit a specialized workflow:
+1. Read the relevant domain's \`index.md\` (e.g. \`.cehnzcode/skills/code/index.md\`) to discover available skill names
+2. Call \`use_skill\` with the chosen skill name to load its full instructions
+3. Follow the instructions in the loaded SKILL.md to complete the task`
+
+export function buildSystemMessage(systemSkillsSnippet?: string, customInstructions?: string): string {
   let prompt = SYSTEM_PROMPT;
+  if (systemSkillsSnippet) {
+    prompt += `\n\n${systemSkillsSnippet}`;
+  }
   if (customInstructions) {
     prompt += `\n\n## User Instructions\n${customInstructions}`;
   }

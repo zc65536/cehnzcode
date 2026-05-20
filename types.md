@@ -152,18 +152,86 @@ interface CompressionResult {
 
 ---
 
+### HookDataMap / ListenerDataMap / HookResult
+
+> 定义在 `src/types.ts`
+
+```typescript
+// 拦截结果：三选一
+type HookResult<T> =
+  | { action: "continue" }
+  | { action: "modify"; data: T }
+  | { action: "cancel"; reason: string };
+
+// 可干预节点：handler 可修改数据或取消操作
+interface HookDataMap {
+  "session:start":  { config: AppConfig; sessionId: string };
+  "turn:before":    { input: string };
+  "model:before":   { messages: Turn[]; tools: ToolDefinition[] };
+  "model:after":    { response: ModelResponse };
+  "tool:before":    { call: ToolCall };
+  "tool:after":     { call: ToolCall; result: ToolResult };
+}
+
+// 纯观察节点：handler 只读数据，不影响流程
+interface ListenerDataMap {
+  "turn:after":       { input: string; finalResponse: string; toolCallCount: number; usage: TokenUsage };
+  "context:compress": { removedCount: number; summary: string };
+  "session:end":      { sessionId: string; totalUsage: TokenUsage; turnCount: number };
+}
+```
+
+**谁和谁**：Orchestrator → HookRunner → Plugin  
+**作用**：定义所有 hook 节点的数据结构。可干预节点的 handler 通过返回 `HookResult` 修改数据或取消操作；纯观察节点的 handler 只读数据，返回 void
+
+---
+
+### HookRunner（`src/hooks/index.ts`）
+
+```typescript
+// 注册可干预拦截器（返回注销函数）
+hookRunner.intercept(event, handler) => () => void
+
+// 注册纯观察监听（返回注销函数）
+hookRunner.listen(event, handler) => () => void
+
+// 瀑布执行拦截链，返回最终数据或取消信号
+hookRunner.run(event, data) => Promise<
+  | { cancelled: false; data: T }
+  | { cancelled: true; reason: string }
+>
+
+// 并行触发所有观察监听
+hookRunner.notify(event, data) => Promise<void>
+
+// 注销所有 handler（测试/插件卸载用）
+hookRunner.unregisterAll() => void
+```
+
+**谁和谁**：Orchestrator → HookRunner；PluginLoader → HookRunner  
+**作用**：管理所有 hook 注册和执行。多个拦截器按注册顺序瀑布执行，任一返回 `cancel` 则链路终止；多个监听并行触发，单个报错不影响其他
+
+---
+
 ### Plugin
 
 ```typescript
 interface Plugin {
   name: string;
   tools?: ToolDefinition[];
-  hooks?: Partial<{ [K in keyof AppEvents]: (data: AppEvents[K]) => void | Promise<void> }>;
+  // 可干预 hook，handler 返回 HookResult
+  interceptors?: {
+    [K in keyof HookDataMap]?: (data: HookDataMap[K]) => Promise<HookResult<HookDataMap[K]>>;
+  };
+  // 纯观察 hook，handler 返回 void
+  listeners?: {
+    [K in keyof ListenerDataMap]?: (data: ListenerDataMap[K]) => void | Promise<void>;
+  };
 }
 ```
 
 **谁和谁**：插件文件 → PluginLoader → ToolRegistry、HookRunner  
-**作用**：插件扩展格式，可携带自定义工具和事件钩子，由 PluginLoader 加载后自动注册
+**作用**：插件扩展格式，可携带自定义工具、可干预拦截器和纯观察监听，由 PluginLoader 加载后自动注册
 
 ---
 
