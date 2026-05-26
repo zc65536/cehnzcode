@@ -16,7 +16,7 @@ function getLogger() {
 
 // Zod schema for validation
 const MCPServerConfigSchema = z.object({
-  transport: z.enum(["stdio", "sse"]),
+  transport: z.enum(["stdio", "sse"]).default("stdio"),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
   url: z.string().optional(),

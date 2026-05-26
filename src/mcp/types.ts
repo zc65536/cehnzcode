@@ -5,7 +5,7 @@ import type { JsonSchema } from "../types.js";
  * 注意：服务器名称由配置文件中 mcpServers 的 key 决定，不在此结构中存储
  */
 export interface MCPServerConfig {
-  transport: "stdio" | "sse"; // 传输方式
+  transport?: "stdio" | "sse"; // 传输方式，默认 stdio
   command?: string; // stdio: 命令（如 uvx, npx）
   args?: string[]; // stdio: 参数
   url?: string; // sse: 服务器 URL

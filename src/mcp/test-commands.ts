@@ -35,10 +35,11 @@ async function testMCPCommands() {
 
   // 创建模拟的命令上下文
   const mockContext: CommandContext = {
-    context: null as any, // 不需要实际的 ConversationManager
-    ui: null as any, // 不需要实际的 UI
-    config: null as any, // 不需要实际的 config
-    exit: () => {}, // 不需要实际的 exit
+    context: null as any,
+    ui: null as any,
+    config: null as any,
+    session: null as any,
+    exit: () => {},
   };
 
   // 测试 1: 显示帮助信息

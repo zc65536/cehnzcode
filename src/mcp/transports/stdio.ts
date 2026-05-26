@@ -20,7 +20,6 @@ export class StdioTransport implements MCPTransport {
   private args: string[];
   private env: Record<string, string>;
   private process: ChildProcess | null = null;
-  private messageQueue: string[] = [];
 
   constructor(command: string, args: string[] = [], env: Record<string, string> = {}) {
     this.command = command;
@@ -35,9 +34,11 @@ export class StdioTransport implements MCPTransport {
 
     getLogger().debug({ command: this.command, args: this.args }, "Starting MCP server process");
 
+    // shell: true 确保 Windows 上能找到 .cmd 脚本（如 npx.cmd、uvx.cmd）
     this.process = spawn(this.command, this.args, {
       env: this.env,
       stdio: ["pipe", "pipe", "pipe"],
+      shell: true,
     });
 
     // 监听进程错误
@@ -56,26 +57,20 @@ export class StdioTransport implements MCPTransport {
       getLogger().debug({ stderr: data.toString() }, "MCP server stderr");
     });
 
-    // 等待进程启动
+    // 等待进程就绪：监听立即退出（真正的启动失败），否则直接继续
+    // MCP 服务器是被动响应模式，不会主动输出内容，需靠 initialize 握手来确认就绪
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("MCP server process startup timeout"));
-      }, 5000);
-
-      // 监听第一次 stdout 输出，表示进程已启动
-      const onData = () => {
-        clearTimeout(timeout);
-        this.process?.stdout?.off("data", onData);
-        resolve();
+      const onExit = (code: number | null) => {
+        // 只有在极短时间内退出才视为启动失败（进程根本没起来）
+        reject(new Error(`MCP server process exited immediately with code ${code}`));
       };
+      this.process?.once("exit", onExit);
 
-      this.process?.stdout?.once("data", onData);
-
-      // 如果进程立即退出，也算启动失败
-      this.process?.once("exit", () => {
-        clearTimeout(timeout);
-        reject(new Error("MCP server process exited immediately"));
-      });
+      // 给进程 500ms 的时间，如果没有立即退出就认为已启动
+      setTimeout(() => {
+        this.process?.removeListener("exit", onExit);
+        resolve();
+      }, 500);
     });
 
     getLogger().info("MCP server process started");

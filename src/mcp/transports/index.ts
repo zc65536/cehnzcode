@@ -7,7 +7,11 @@ import type { MCPServerConfig, MCPTransport } from "../types.js";
  * 根据配置创建对应的传输层实例
  */
 export function createTransport(config: MCPServerConfig): MCPTransport {
-  switch (config.transport) {
+  // transport 字段在 TypeScript 类型中为可选，但 Zod 校验后默认为 "stdio"
+  // 这里兜底处理未经 Zod 校验的手动构造 config
+  const transport = config.transport ?? "stdio";
+
+  switch (transport) {
     case "stdio":
       if (!config.command) {
         throw new Error("stdio transport requires 'command' field");
@@ -21,6 +25,6 @@ export function createTransport(config: MCPServerConfig): MCPTransport {
       return new SSETransport(config.url);
 
     default:
-      throw new Error(`Unknown transport type: ${(config as MCPServerConfig).transport}`);
+      throw new Error(`Unknown transport type: ${transport}`);
   }
 }
