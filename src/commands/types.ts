@@ -1,6 +1,7 @@
 import type { AppConfig, UIAdapter } from "../types.js";
 import type { ConversationManager } from "../context/index.js";
 import type { TaskPlanner } from "../planner/types.js";
+import type { IKnowledgeManager } from "../knowledge/types.js";
 
 // ============ Session 模式 ============
 
@@ -26,6 +27,8 @@ export interface CommandContext {
   planner?: TaskPlanner;
   /** 会话模式管理器，负责讨论模式等特殊输入状态的路由 */
   session: SessionModeManager;
+  /** 错题本管理器 */
+  knowledgeManager: IKnowledgeManager;
   /** 请求退出主循环 */
   exit(): void;
 }

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import 'dotenv/config' 
 import { loadConfig, setConfig } from "./config/index.js";
 import { createChildLogger } from "./logger/index.js";
 import { toolRegistry } from "./tools/registry.js";
@@ -19,6 +18,8 @@ import grep from "./tools/builtins/grep.js";
 import projectStructureTool from "./tools/builtins/project_structure.js";
 import useSkillTool from "./tools/builtins/use_skill.js";
 import { skillRegistry } from "./skills/index.js";
+import { knowledgeManager } from "./knowledge/index.js";
+import { recordKnowledgeTool, searchKnowledgeTool } from "./tools/builtins/knowledge.js";
 
 async function main(): Promise<void> {
   try {
@@ -28,8 +29,12 @@ async function main(): Promise<void> {
     const logger = createChildLogger("main");
     logger.info("cehnzcode starting...");
 
+    // Initialize knowledge manager (registers hooks internally)
+    // Access to trigger constructor; actual singleton is already created on import
+    logger.info({ enabled: knowledgeManager.isEnabled() }, "Knowledge manager initialized");
+
     // Register builtin tools
-    toolRegistry.registerAll([readFile, writeFile, editFile, bash, globTool, grep, projectStructureTool, useSkillTool]);
+    toolRegistry.registerAll([readFile, writeFile, editFile, bash, globTool, grep, projectStructureTool, useSkillTool, recordKnowledgeTool, searchKnowledgeTool]);
     logger.info({ count: toolRegistry.getAll().length }, "Builtin tools registered");
 
     // Initialize MCP and sync tools

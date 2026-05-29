@@ -1,5 +1,14 @@
 import { configSchema } from "./schema.js";
 import type { AppConfig } from "../types.js";
+import { config as loadDotenv } from "dotenv";
+import * as path from "node:path";
+import * as os from "node:os";
+
+// 按优先级加载 .env：当前目录 > ~/.cehnzcode/.env
+// 这样从任意目录运行 exe 时，只要在用户目录配置一次即可
+loadDotenv();
+loadDotenv({ path: path.join(path.dirname(process.execPath), ".env"), override: false });
+loadDotenv({ path: path.join(os.homedir(), ".cehnzcode", ".env"), override: false });
 
 function loadEnv(): Record<string, string | undefined> {
   return {
@@ -13,17 +22,21 @@ function loadEnv(): Record<string, string | undefined> {
     logLevel: process.env.LOG_LEVEL,
     sessionDir: process.env.SESSION_DIR,
     pluginDirs: process.env.PLUGIN_DIRS,
+    knowledgeEnabled: process.env.KNOWLEDGE_ENABLED,
   } as Record<string, string | undefined>;
 }
 
 function parseNumeric(raw: Record<string, string | undefined>): Record<string, unknown> {
   const numericKeys = ["maxTokens", "contextLimit", "compressKeepTurns", "toolTimeout"];
+  const booleanKeys = ["knowledgeEnabled"];
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(raw)) {
     if (value === undefined) continue;
     if (numericKeys.includes(key)) {
       result[key] = parseInt(value, 10);
+    } else if (booleanKeys.includes(key)) {
+      result[key] = value.toLowerCase() !== "false";
     } else if (key === "pluginDirs") {
       result[key] = value.split(",").map((s) => s.trim()).filter(Boolean);
     } else {

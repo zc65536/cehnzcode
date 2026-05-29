@@ -11,6 +11,7 @@ export const configSchema = z.object({
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   sessionDir: z.string().default("./.sessions"),
   pluginDirs: z.array(z.string()).default([]),
+  knowledgeEnabled: z.boolean().default(true),
 });
 
 export type ConfigSchema = z.infer<typeof configSchema>;

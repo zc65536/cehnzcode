@@ -39,6 +39,7 @@ async function testMCPCommands() {
     ui: null as any,
     config: null as any,
     session: null as any,
+    knowledgeManager: null as any,
     exit: () => {},
   };
 

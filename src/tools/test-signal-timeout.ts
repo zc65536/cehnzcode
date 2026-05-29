@@ -23,8 +23,9 @@ async function testSignalTimeout() {
     logLevel: "error",
     sessionDir: ".sessions",
     pluginDirs: [],
+    knowledgeEnabled: true,
   };
-  
+
   const mockContext: ToolContext = {
     cwd: process.cwd(),
     config: mockConfig,

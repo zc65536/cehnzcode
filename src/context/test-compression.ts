@@ -27,6 +27,7 @@ const mockConfig: AppConfig = {
   logLevel: (process.env.LOG_LEVEL as any) || "info",
   sessionDir: process.env.SESSION_DIR || "./.sessions",
   pluginDirs: process.env.PLUGIN_DIRS ? process.env.PLUGIN_DIRS.split(",") : [],
+  knowledgeEnabled: true,
 };
 
 /**

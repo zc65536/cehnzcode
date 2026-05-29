@@ -8,8 +8,10 @@ import { buildSystemMessage } from "../prompts/index.js";
 import { skillRegistry } from "../skills/index.js";
 import { createChildLogger } from "../logger/index.js";
 import { commandRegistry } from "../commands/index.js";
+import { handlePlanDiscussionInput } from "../commands/builtins/plan.js";
 import { TaskPlannerImpl } from "../planner/index.js";
 import { hookRunner } from "../hooks/index.js";
+import { knowledgeManager } from "../knowledge/index.js";
 import type { AppConfig, UIAdapter, ToolResult } from "../types.js";
 import type { CommandContext, SessionMode, SessionModeManager } from "../commands/types.js";
 
@@ -84,6 +86,7 @@ export class Orchestrator {
       context: this.context,
       planner: this.planner,
       session: this.modeManager,
+      knowledgeManager,
       exit: () => { this.running = false; },
     };
   }
@@ -157,7 +160,6 @@ export class Orchestrator {
   /** 讨论模式下的输入处理，委托给 plan 命令模块 */
   private async handlePlanDiscussionInput(input: string): Promise<void> {
     try {
-      const { handlePlanDiscussionInput } = await import("../commands/builtins/plan.js");
       await handlePlanDiscussionInput(input, this.buildCommandContext());
     } catch (err) {
       this.ui.showError(err as Error);

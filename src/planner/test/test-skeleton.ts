@@ -72,6 +72,7 @@ const config: AppConfig = {
   logLevel: "error",
   sessionDir: "/tmp",
   pluginDirs: [],
+  knowledgeEnabled: true,
 };
 
 const model = new ModelClient(config);

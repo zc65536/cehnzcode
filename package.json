@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "description": "Mini Claude Code - extensible AI coding assistant",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
   "bin": {
-    "cehnzcode": "dist/index.js"
+    "cehnzcode": "dist/index.cjs"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
@@ -29,5 +29,16 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "pkg": {
+    "scripts": [
+      "node_modules/openai/**/*.js",
+      "node_modules/@anthropic-ai/sdk/**/*.js",
+      "node_modules/dotenv/**/*.js"
+    ],
+    "assets": [
+      "node_modules/openai/**/*.json",
+      "node_modules/@anthropic-ai/sdk/**/*.json"
+    ]
   }
 }

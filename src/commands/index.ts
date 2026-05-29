@@ -1,54 +1,34 @@
 import { commandRegistry } from "./registry.js";
 import { createChildLogger } from "../logger/index.js";
-import type { CommandDefinition } from "./types.js";
+
+// 静态导入所有内置命令，打包工具可以在编译期将其全部内联
+// 不使用动态 import()，因为打包成单文件后运行时动态加载路径会失效
+import { clearCommand } from "./builtins/clear.js";
+import { exitCommand } from "./builtins/exit.js";
+import { helpCommand } from "./builtins/help.js";
+import { mcpCommand } from "./builtins/mcp.js";
+import { planCommand } from "./builtins/plan.js";
+import { skillCommand } from "./builtins/skill.js";
+import { knowledgeCommand } from "./builtins/knowledge.js";
 
 const logger = createChildLogger("command-loader");
 
 /**
- * 自动加载所有内置命令
- * 使用动态 import 配合显式的文件列表，确保打包工具能正确处理
+ * 注册所有内置命令
  */
 export async function loadBuiltinCommands(): Promise<void> {
-  // 显式列出所有命令文件，这样打包工具可以静态分析
-  const commandFiles = [
-    "./builtins/clear.js",
-    "./builtins/exit.js",
-    "./builtins/help.js",
-    "./builtins/mcp.js",
-    "./builtins/plan.js",
-    "./builtins/skill.js",
+  const commands = [
+    clearCommand,
+    exitCommand,
+    helpCommand,
+    mcpCommand,
+    planCommand,
+    skillCommand,
+    knowledgeCommand,
   ];
-
-  const commands: CommandDefinition[] = [];
-
-  for (const file of commandFiles) {
-    try {
-      const mod = await import(file);
-      // 支持具名导出（如 clearCommand）或 default 导出
-      const candidates: unknown[] = mod.default ? [mod.default] : Object.values(mod);
-      
-      for (const candidate of candidates) {
-        if (isCommandDefinition(candidate)) {
-          commands.push(candidate);
-        }
-      }
-    } catch (err) {
-      logger.warn({ file, error: (err as Error).message }, "Failed to load builtin command");
-    }
-  }
 
   commandRegistry.registerAll(commands);
   logger.debug({ count: commands.length }, "Builtin commands loaded");
-}
-
-function isCommandDefinition(v: unknown): v is CommandDefinition {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    typeof (v as CommandDefinition).name === "string" &&
-    typeof (v as CommandDefinition).description === "string" &&
-    typeof (v as CommandDefinition).execute === "function"
-  );
 }
 
 export { commandRegistry } from "./registry.js";

@@ -35,6 +35,7 @@ async function testExecutorMCP() {
     logLevel: "error",
     sessionDir: ".sessions",
     pluginDirs: [],
+    knowledgeEnabled: true,
   };
 
   const testContext: ToolContext = {

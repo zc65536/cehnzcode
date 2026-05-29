@@ -6,13 +6,11 @@ let logger: pino.Logger | null = null;
 export function getLogger(): pino.Logger {
   if (!logger) {
     const config = getConfig();
-    logger = pino({
-      level: config.logLevel,
-      transport: {
-        target: "pino/file",
-        options: { destination: 2 }, // stderr
-      },
-    });
+    // 使用同步写入 stderr，避免 Worker 线程（pkg 打包后 Worker 无法加载文件）
+    logger = pino(
+      { level: config.logLevel },
+      pino.destination({ dest: 2, sync: true })
+    );
   }
   return logger;
 }

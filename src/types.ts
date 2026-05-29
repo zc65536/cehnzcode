@@ -11,6 +11,7 @@ export interface AppConfig {
   logLevel: "debug" | "info" | "warn" | "error";
   sessionDir: string;
   pluginDirs: string[];
+  knowledgeEnabled: boolean;
 }
 
 // ==================== Message ====================

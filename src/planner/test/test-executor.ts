@@ -90,6 +90,7 @@ const testConfig: AppConfig = {
   logLevel: "error",
   sessionDir: "/tmp",
   pluginDirs: [],
+  knowledgeEnabled: true,
 };
 
 // ============ DependencyGraphImpl 测试 ============

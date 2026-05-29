@@ -26,6 +26,7 @@ async function testStreamingWithTokens() {
     logLevel: "info",
     sessionDir: ".sessions",
     pluginDirs: [],
+    knowledgeEnabled: true,
   };
 
   const client = new ModelClient(config);
